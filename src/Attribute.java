@@ -106,7 +106,7 @@ public class Attribute implements Serializable{
 		if (this.size >= 0 )
 			ret = id + " " + type + "[" + Integer.toString(this.size) + "]";
 		return ret;
-	}	
+	}}	
 	
 	
 
