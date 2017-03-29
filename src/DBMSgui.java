@@ -31,10 +31,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	
 	JMenuItem miOpen, miSave, miSaveAs, miUndo, miRedo, miRun, miComment, miPrueba;
 	JButton btnOpenFile, btnSave, btnRun, btnUndo, btnRedo, btnDelete, btnVerbose;
-	JTextPane textArea, dataOutputArea, dataReadArea, dataVerbose;
 	JTextField status, dataBaseUse;
-	JSplitPane splitPane1;
-	JTabbedPane tabbedPane;
 
 	JFileChooser fileChooser;
 	UndoManager undoManager;
@@ -79,23 +76,43 @@ public class DBMSgui extends JFrame implements ActionListener {
 		JMenuBar menuBar = new JMenuBar();
 		this.setJMenuBar(menuBar);
 		
-		JMenu mnNewMenu = new JMenu("File");
-		menuBar.add(mnNewMenu);
+		JMenu menuFile = new JMenu("File");
+		menuBar.add(menuFile);
 		
 		miOpen = new JMenuItem("Open");
 		KeyStroke keyStrokeToOpen = KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.CTRL_DOWN_MASK);
 		miOpen.setAccelerator(keyStrokeToOpen);
 		miOpen.addActionListener(this);
+		menuFile.add(miOpen);
 		
-		mnNewMenu.add(miOpen);
+		miSave = new JMenuItem("Save");
+		KeyStroke keyStrokeToSave = KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_DOWN_MASK);
+		miSave.setAccelerator(keyStrokeToSave);
+		miSave.addActionListener(this);
+		menuFile.add(miSave);
 		
-		//arreglar todo esto!!
-		JScrollPane scrollPane_1 = new JScrollPane();
+		miSaveAs = new JMenuItem("Save As");
+		miSaveAs.addActionListener(this);
+		menuFile.add(miSaveAs);
 		
-		textArea = new JTextPane();
-		textArea.setDocument(new SqlDocument());
-		textArea.getDocument().addUndoableEditListener(undoManager);
-		scrollPane_1.setViewportView(textArea);
+		JMenu menuEdit = new JMenu("Edit");
+		menuBar.add(menuEdit);
+		
+		miUndo = new JMenuItem("Undo");
+		KeyStroke keyStrokeToUndo = KeyStroke.getKeyStroke(KeyEvent.VK_Z, KeyEvent.CTRL_DOWN_MASK);
+		miUndo.setAccelerator(keyStrokeToUndo);
+		miUndo.addActionListener(this);
+		menuEdit.add(miUndo);
+		
+		miRedo = new JMenuItem("Redo");
+		KeyStroke keyStrokeToRedo = KeyStroke.getKeyStroke(KeyEvent.VK_Y, KeyEvent.CTRL_DOWN_MASK);
+		miRedo.setAccelerator(keyStrokeToRedo);
+		miRedo.addActionListener(this);
+		menuEdit.add(miRedo);
+		
+		 //miRun, miComment, miPrueba
+		
+		
 	}
 
 	@Override
@@ -123,11 +140,7 @@ public class DBMSgui extends JFrame implements ActionListener {
         		while (scanner.hasNextLine()){
         			newTxt += scanner.nextLine()+"\n";
         		}
-        		SqlDocument doc = new SqlDocument();
-        		textArea.setDocument(new DefaultStyledDocument());
-        		doc.insertString(0, newTxt, null);
         		
-        		textArea.setDocument(doc);
         		
         		scanner.close();
         		
