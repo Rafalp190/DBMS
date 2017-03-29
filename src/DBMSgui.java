@@ -1,3 +1,4 @@
+import java.awt.BorderLayout;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -6,7 +7,11 @@ import java.io.File;
 import java.util.Scanner;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
+import java.awt.Image;
 
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -19,7 +24,10 @@ import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
+import javax.swing.border.Border;
+import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.undo.UndoManager;
 
@@ -29,8 +37,8 @@ import views.SqlDocument;
 public class DBMSgui extends JFrame implements ActionListener {
 
 	
-	JMenuItem miOpen, miSave, miSaveAs, miUndo, miRedo, miRun, miComment, miPrueba;
-	JButton btnOpenFile, btnSave, btnRun, btnUndo, btnRedo, btnDelete, btnVerbose;
+	JMenuItem miOpen, miSave, miSaveAs, miUndo, miRedo, miRun, miComment, miCut, miCopy, miPaste;
+	JButton btnOpen, btnSave, btnRun, btnUndo, btnRedo, btnDelete;
 	JTextField status, dataBaseUse;
 
 	JFileChooser fileChooser;
@@ -110,16 +118,176 @@ public class DBMSgui extends JFrame implements ActionListener {
 		miRedo.addActionListener(this);
 		menuEdit.add(miRedo);
 		
-		 //miRun, miComment, miPrueba
+		miCut = new JMenuItem("Cut");
+		KeyStroke keyStrokeToCut = KeyStroke.getKeyStroke(KeyEvent.VK_X, KeyEvent.CTRL_DOWN_MASK);
+		miCut.setAccelerator(keyStrokeToCut);
+		miCut.addActionListener(this);
+		menuEdit.add(miCut);
 		
+		miCopy = new JMenuItem("Copy");
+		KeyStroke keyStrokeToCopy = KeyStroke.getKeyStroke(KeyEvent.VK_C, KeyEvent.CTRL_DOWN_MASK);
+		miCopy.setAccelerator(keyStrokeToCut);
+		miCopy.addActionListener(this);
+		menuEdit.add(miCopy);
 		
+		miPaste = new JMenuItem("Paste");
+		KeyStroke keyStrokeToPaste = KeyStroke.getKeyStroke(KeyEvent.VK_V, KeyEvent.CTRL_DOWN_MASK);
+		miPaste.setAccelerator(keyStrokeToCut);
+		miPaste.addActionListener(this);
+		menuEdit.add(miCopy);
+		
+		miComment = new JMenuItem("Comment");
+		miComment.addActionListener(this);
+		menuEdit.add(miComment);
+		
+		JMenu menuRun = new JMenu("Run");
+		menuBar.add(menuRun);
+		
+		miRun = new JMenuItem("Run");
+		KeyStroke keyStrokeToRun = KeyStroke.getKeyStroke(KeyEvent.VK_F5,0); 
+		miRun.setAccelerator(keyStrokeToRun);
+		miRun.addActionListener(this);
+		menuRun.add(miRun);
+		
+		//arreglar desde aqui
+		/*this.getContentPane().setLayout(new BorderLayout(0, 0));
+		
+		JToolBar toolBar = new JToolBar();
+		this.getContentPane().add(toolBar, BorderLayout.NORTH);
+		
+		btnOpen = new JButton("Open");
+		btnOpen.setToolTipText("Open");
+		btnOpen.addActionListener(this);
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/open.png"));
+			btnOpen.setIcon(new ImageIcon(img));
+			btnOpen.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnOpen.setBorder(emptyBorder);
+		} 
+		catch (Exception e){
+			System.out.println("Error in imagenes/open.png");
+		}
+		toolBar.add(btnOpen);
+		
+		btnSave = new JButton("Save");
+		btnSave.addActionListener(this);
+		btnSave.setToolTipText("Save");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/save.png"));
+			btnSave.setIcon(new ImageIcon(img));
+			btnSave.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnSave.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/save.png");
+		}
+		toolBar.add(btnSave);
+		
+		JButton btnCut = new JButton(new DefaultEditorKit.CutAction());
+		btnCut.setText("Cut");
+		btnCut.setToolTipText("Cut");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/Cut.png"));
+			btnCut.setIcon(new ImageIcon(img));
+			btnCut.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnCut.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/Cut.png");
+		}
+		toolBar.add(btnCut);
+		
+		JButton btnCopy = new JButton(new DefaultEditorKit.CopyAction());
+		btnCopy.setText("Copy");
+		btnCopy.setToolTipText("Copy");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/copy.png"));
+			btnCopy.setIcon(new ImageIcon(img));
+			btnCopy.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnCopy.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/copy.png");
+		}
+		toolBar.add(btnCopy);
+		
+		JButton btnPaste = new JButton(new DefaultEditorKit.PasteAction());
+		btnPaste.setText("Paste");
+		btnPaste.setToolTipText("Paste");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/paste.png"));
+			btnPaste.setIcon(new ImageIcon(img));
+			btnPaste.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnPaste.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/paste.png");
+		}
+		toolBar.add(btnPaste);
+		
+		btnUndo = new JButton("Undo");
+		btnUndo.addActionListener(this);
+		btnUndo.setToolTipText("Undo");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/undo.png"));
+			btnUndo.setIcon(new ImageIcon(img));
+			btnUndo.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnUndo.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/undo.png");
+		}
+		toolBar.add(btnUndo);
+		
+		btnRedo = new JButton("Redo");
+		btnRedo.addActionListener(this);
+		btnRedo.setToolTipText("Redo");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/redo.png"));
+			btnRedo.setIcon(new ImageIcon(img));
+			btnRedo.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnRedo.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/redo.png");
+		}
+		toolBar.add(btnRedo);
+		
+		btnRun = new JButton("Run");
+		btnRun.addActionListener(this);
+		btnRun.setToolTipText("Run");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/play.png"));
+			btnRun.setIcon(new ImageIcon(img));
+			btnRun.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnRun.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/play.png");
+		}
+		toolBar.add(btnRun);
+		
+		btnDelete = new JButton("Delete All");
+		btnDelete.addActionListener(this);
+		btnDelete.setToolTipText("Delete all text from editor");
+		try{
+			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/erase.png"));
+			btnRun.setIcon(new ImageIcon(img));
+			btnRun.setText("");
+			Border emptyBorder = BorderFactory.createEmptyBorder();
+			btnRun.setBorder(emptyBorder);
+		} catch (Exception e){
+			System.out.println("Error in imagenes/play.png");
+		}
+		toolBar.add(btnDelete);*/
 	}
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		// TODO Auto-generated method stub
 		if (e.getSource() == miOpen ||
-				e.getSource() == btnOpenFile){
+				e.getSource() == btnOpen){
 			open();
 	        
 		}
