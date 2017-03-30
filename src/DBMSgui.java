@@ -4,6 +4,8 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.Scanner;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
@@ -25,13 +27,19 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.JToolBar;
+import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.border.Border;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.undo.UndoManager;
 
-import views.SqlDocument;
+import views.Tree;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 
 
 public class DBMSgui extends JFrame implements ActionListener {
@@ -150,7 +158,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		menuRun.add(miRun);
 		
 		//arreglar desde aqui
-		/*this.getContentPane().setLayout(new BorderLayout(0, 0));
+		this.getContentPane().setLayout(new BorderLayout(0, 0));
 		
 		JToolBar toolBar = new JToolBar();
 		this.getContentPane().add(toolBar, BorderLayout.NORTH);
@@ -280,7 +288,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 		} catch (Exception e){
 			System.out.println("Error in imagenes/play.png");
 		}
-		toolBar.add(btnDelete);*/
+		toolBar.add(btnDelete);
+		
+		//clavo aqui
+		/*
+		JSplitPane splitpane = new JSplitPane();
+		splitpane.setRightComponent(splitpane);*/
+		
 	}
 
 	@Override
