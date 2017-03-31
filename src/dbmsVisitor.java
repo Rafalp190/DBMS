@@ -34,6 +34,7 @@ import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.misc.NotNull;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import generatedsources.sqlLexer;
 import generatedsources.sqlParser;
 
 
@@ -49,6 +50,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	private Schema schema = new Schema();
 	private DataBase database = new DataBase();
 	//Operation attributes
+	private DataBase current = new DataBase();
 	private Table table = new Table();
 	private ArrayList<String> errors = new ArrayList<String>();
 	private ArrayList<String> messages = new ArrayList<String>();
@@ -122,7 +124,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	 * @param tab
 	 * @param db_name
 	 */
-	public void SaveTable(String name, Table tab, String db_name){
+	public void saveTable(String name, Table tab, String db_name){
 		try{
 			FileOutputStream fstream = new FileOutputStream(this.path+"\\"+ db_name +"\\"+name +".bin");
 			ObjectOutputStream outstream = new ObjectOutputStream(fstream);
@@ -211,7 +213,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			out += i+"\n";
 		return out;
 	}
-	
+	public DataBase getCurrent() {
+		return current;
+	}
+
+	public void setCurrent(DataBase current) {
+		this.current = current;
+	}
+
 /**
  * VISITOR LOGIC
  */
@@ -224,8 +233,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	
 	/* (non-Javadoc)
 	 * @see generatedsources.sqlBaseVisitor#visitUse_schema_statement(generatedsources.sqlParser.Use_schema_statementContext)
-	 */
-	/**
+	 *
+	 *
+	 *
+	 * 
+	 * VISITOR LOGIC : DATA DEFINITION LANGUAGE
+	 * 
+	 * 
+	 * 
 	 * VISITOR LOGIC: USE STATEMENT
 	 */
 	@Override
@@ -252,8 +267,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	
 	/* (non-Javadoc)
 	 * @see generatedsources.sqlBaseVisitor#visitSchema_definition(generatedsources.sqlParser.Schema_definitionContext)
-	 */
-	/**
+	 *
+	 *
+	 *
 	 * VISITOR LOGIC: CREATE DATABASE STATEMENT
 	 */
 	@Override
@@ -275,6 +291,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	}
 	/**
 	 * VISITOR LOGIC: DROP DATABASE STATEMENT
+	 * (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitDrop_schema_statement(generatedsources.sqlParser.Drop_schema_statementContext)
 	 */
 	@Override
 	public Object visitDrop_schema_statement(sqlParser.Drop_schema_statementContext ctx){
@@ -283,7 +301,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		if (dir.exists())
 		{
 			//Creates new database array list that doesn't include the deleted one
-			ArrayList<DataBase> = new_schema = new ArrayList<DataBase>();
+			ArrayList<DataBase> new_schema = new ArrayList<DataBase>();
 			DataBase delete = new DataBase();
 			boolean exists = false;
 			for(DataBase db: this.schema.getSchema())
@@ -310,7 +328,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					stack.push(dir);
 					while (!stack.isEmpty()){
 						if (stack.lastElement().isDirectory()){
-							current = stack.lastElement().listFiles()
+							current = stack.lastElement().listFiles();
 									if (current != null){
 										if (current.length > 0){
 											for (File cf: current)
@@ -340,5 +358,352 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		}
 		return (T)"";
 	}
+	/**
+	 * VISITOR LOGIC: ALTER DATABASE STATEMENT
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitAlter_database_statement(generatedsources.sqlParser.Alter_database_statementContext)
+	 */
+	@Override
+	public Object visitAlter_database_statement(sqlParser.Alter_database_statementContext ctx){
+		String ID = ctx.ID(0).getText();
+		String NewID = ctx.ID(1).getText();
+		File dir = new File(this.path + ID);
+		if (!ID.equals(NewID)){
+			boolean exists = false;
+			for(DataBase db: this.schema.getSchema())
+				if (db.getName().equals(ID)){
+					db.setName(NewID);
+					exists = true;
+					break;
+				}
+			if (exists){
+				//Saves changes in filesystem
+				if (this.getCurrent().getName().equals(ID)){
+					this.getCurrent().setName(NewID);
+				}
+				dir.renameTo(new File(this.path + NewID));
+				System.out.println("DataBase \""+ ID + "\" renamed to \""+ NewID + "\" succesfully");
+				this.messages.add("DataBase \""+ ID + "\" renamed to \""+ NewID + "\" succesfully");
+			}
+			else{
+				String nonexistentdb = "DataBase can't be renamed because \"" + ID +"\" doesn't exist @line: "+ctx.getStop().getLine();
+				this.errors.add(nonexistentdb);
+			}
+		}
+		return (T)"";
+	}
+	/**
+	 * VISITOR LOGIC: ALTER TABLE RENAME TO STATEMENT
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitRename_table_statement(generatedsources.sqlParser.Rename_table_statementContext)
+	 */
+	@Override
+	public Object visitRename_table_statement(sqlParser.Rename_table_statementContext ctx){
+		String ID = ctx.ID(0).getText();
+		String NewID = ctx.ID(1).getText();
+		
+		if (!ID.equals(NewID))
+		{
+			if (this.getCurrent().getName().isEmpty())
+			{
+				String noDB = "No database in use @line: " + ctx.getStop().getLine();
+				this.errors.add(noDB);
+			}
+			else
+			{
+				//Verifies table with ID exists
+				if (this.getCurrent().existTable(ID))
+				{	
+					//Verifies that a table with that name already exists
+					if(!this.getCurrent().existTable(NewID))
+					{
+						//Rename references
+						if (!this.getCurrent().existRef(ID))
+						{
+							for (Table t: this.getCurrent().getTables())
+								t.renameRefIdFK(ID, NewID);
+						}
+						if (!this.getCurrent().getConstraints_refs().isEmpty())
+						{
+							this.getCurrent().renameRef(ID, NewID);
+						}	
+						System.out.println("Table \"" + ID + "\" renamed successfully to \"" + NewID + "\"");
+						this.messages.add("Table \"" + ID + "\" renamed successfully to \"" + NewID + "\"");
+						Table tab = this.getCurrent().getTable(ID);
+						tab.setName(NewID);
+						File dir = new File(this.path+"\\"+this.getCurrent().getName()+"\\"+ ID + ".bin");
+						dir.renameTo(new File(this.path +"\\"+ this.getCurrent().getName()+"\\"+ NewID +".bin"));
+					}
+					else
+					{
+						String tablealreadyexists = "A table with the same name already exists in the DataBase \""+ this.getCurrent().getName()+"\" @line: "+ ctx.getStop().getLine();
+						this.errors.add(tablealreadyexists);
+					}
+				}
+				else
+				{
+					String table_not_found = "The table \"" + ID + "\" does not exist in the DataBase \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+					this.errors.add(table_not_found);
+				}
+			}
+		}
+		return(T)"";
+	}
+	/**
+	 * VISITOR LOGIC: CREATE TABLE STATEMENT
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitTable_definition(generatedsources.sqlParser.Table_definitionContext)
+	 */
+	@Override
+	public Object visitTable_definition(sqlParser.Table_definitionContext ctx){
+		String name = ctx.ID().getText();
+		ArrayList<Attribute> atr = new ArrayList<Attribute>();
+		ArrayList<Constraint> pks = new ArrayList<Constraint>();
+		ArrayList<Constraint> fks = new ArrayList<Constraint>();
+		ArrayList<Constraint> checks = new ArrayList<Constraint>();
+		ArrayList<String> ids = new ArrayList<String>();
+		int errores = 0;
+		//Verifies the data base exists
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+			errores++;
+		}
+		else
+		{
+			//Tables cant have the same name
+			if (!this.getCurrent().existTable(name))
+			{
+				for(int i = 4; i <ctx.getChildCount()-2; i++)
+				{
+					ParseTree child = ctx.getChild(i);
+					String childtxt = child.getText();
+					//Ignore comma
+					if (!childtxt.equals(","))
+					{
+						//Attribute
+						if(child.getChildCount()==2)
+						{
+							atr.add((Attribute)this.visit(child));
+						}
+						//Constraint
+						else
+						{
+							Constraint constr = (Constraint)this.visit(child);
+							ids.add(constr.getId());
+							switch (constr.gettype())
+							{
+							case "Primary Key":
+								if (pks.isEmpty())
+									pks.add(constr);
+								else
+								{
+									String multiplePK = "A table can't have more than one Primary Key @line: " + ctx.getStop().getLine();
+									this.errors.add(multiplePK);
+								}
+								break;
+							
+							case "Foreign Key":
+								fks.add(constr);
+								break;
+							case "Check":
+								checks.add(constr);
+								break;
+							}
+						}
+					}
+				}
+				//Validations
+				if(errores == 0)
+				{
+					//No attribute can have the same name
+					ArrayList<String> attribute_names = new ArrayList<String>();
+					boolean error1 = false;
+					int cont = 0;
+					for (Attribute a: atr)
+					{
+						String name_a = a.getId();
+						attribute_names.add(name_a);
+						error1 = false;
+						for (Attribute j: atr.subList(cont+1, atr.size()))
+						{
+							if (name_a.equals(j.getId()))
+							{
+								error1= true;
+								errores++;
+								break;
+							}
+						}
+						if (error1 == true)
+						{
+							String attr_declared = "The attribute \"" + name_a + "\" is declared more than once @line: " + ctx.getStop().getLine();
+							this.errors.add(attr_declared);
+						}
+						cont++;
+					}
+					// No constraint can have the same name
+					error1 = false;
+					cont = 0;
+					for (String i: ids)
+					{
+						error1 = false;
+						for (String j: ids.subList(cont, ids.size()))
+						{
+							if (i.equals(j))
+							{
+								error1 = true;
+								errores++;
+								break;
+							}
+						}
+						if (error1== true)
+						{
+							String const_declared = "The constraint \""+ i +"\" is declared more than once @line: " +ctx.getStop().getLine();
+							this.errors.add(const_declared);
+						}
+						cont++;
+					}
+					//Local IDs belong to table
+					if (errores == 0)
+					{
+						if (!pks.isEmpty())
+						{
+							Constraint pk = pks.get(0);
+							ArrayList<String> idPk = pk.getIDS_local();
+							for (String i: ids)
+							{
+								if (!attribute_names.contains(i))
+								{
+									String localIDnotfound = "The attribute \""+ i+ "\" from the Primary Key \"" + pk.getId() + "\" is not declared in the table \"" + name + "\" @line: " + ctx.getStop().getLine();
+									this.errors.add(localIDnotfound);
+									errores++;
+								} 	
+							}
+						}
+						//Foreign Keys
+						for (Constraint i:fks)
+						{
+							//Local Ids
+							for (String j: i.getIDS_local())
+							{	
+								if (! attribute_names.contains(j))
+								{
+									String localIDnotfound = "The attribute \""+ j + "\" from the Foreign Key \"" + i.getId()+ "\" is not declared in the table \"" + name + "\" @line: " + ctx.getStop().getLine();
+									this.errors.add(localIDnotfound);
+									errores++;
+								}
+							}
+							//Ref IDS
+							if (!this.getCurrent().existTable(i.getId_ref()))
+							{
+								String table_not_found = "The table \""+ i.getId_ref() +"\" that references the Foreign Key \"" +i.getId() + "\" is not declared in the database \"" + this.getCurrent().getName()+"\" @line: " + ctx.getStop().getLine();
+								this.errors.add(table_not_found);
+								errores++;
+							}
+							else
+							{
+								Table table_ref = this.getCurrent().getTable(i.getId_ref());
+								// Verify that RefIDS belong to the table
+								for (String j: i.getIDS_refs())
+								{
+									if(!table_ref.hasAttribute(j))
+									{
+										String ref_id_not_found = "The attribute \"" + j + "\" is not declared in the table \"" + i.getId_ref() + "\" that references the Foreign Key \"" + i.getId() + "\" @line: "+ ctx.getStop().getLine();
+										this.errors.add(ref_id_not_found);
+										errores++;
+									}
+								}
+							}
+						}
+						//Check
+						table = new Table();
+						table.setattributes(atr);
+						
+						for (Constraint i: checks)
+						{
+						//Local IDs
+							//Analyzes the checks by creating an input stream
+							ANTLRInputStream input = new ANTLRInputStream(i.getCondition());
+							sqlLexer lexer = new sqlLexer(input);
+							CommonTokenStream tokens = new CommonTokenStream(lexer);
+							sqlParser parser = new sqlParser(tokens);
+							ParseTree tree = parser.condition();
+							Object obj = (Object) visit(tree);
+							
+							if (obj == null)
+							{
+								String chk = "Check: " + i.getId() + "not correctly defined @line: " + ctx.getStop().getLine();
+								this.errors.add(chk);
+								errores++;
+							}
+						}
+						// Creates table when thorougly validated
+						if (errores == 0)
+						{
+							
+							Table newTab = new Table(name,atr,pks,fks,checks);
+							for(Constraint i: fks)
+							{
+								this.getCurrent().addRef(i.getId_ref());
+							}
+							this.getCurrent().addTable(newTab);
+							System.out.println("Table \"" +name+"\" successfully aded to the DataBase \"" + this.getCurrent().getName()+ "\"");
+							this.messages.add("Table \"" +name+"\" successfully aded to the DataBase \"" + this.getCurrent().getName()+ "\"");
+							
+							saveTable(this.getCurrent().getName(), newTab, name);					
+						}
+					}
+				}
+			}
+			else
+			{
+				String table_existent = "A table with the same name already exists in the DataBase \"" +this.getCurrent().getName() +"\" @line: " +ctx.getStop().getLine();
+				this.errors.add(table_existent);
+			}
+		}	
+		return(T)"";
+	}	
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitColumn_literal(generatedsources.sqlParser.Column_literalContext)
+	 */
+	@Override
+	public Object visitColumn_literal(sqlParser.Column_literalContext ctx){
+		Attribute attr = (Attribute) this.visit(ctx.tipo_literal());
+		attr.setId(ctx.ID().getText());
+		
+		return (T)attr;
+	}
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitColumn_constraint(generatedsources.sqlParser.Column_constraintContext)
+	 */
+	@Override
+	public Object visitColumn_constraint(sqlParser.Column_constraintContext ctx){
+		Constraint constr = (Constraint) this.visit(ctx.constraint());
+		return (T)constr;
+	}
+	
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 }
+	
