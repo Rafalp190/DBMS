@@ -43,6 +43,11 @@ import generatedsources.sqlParser;
  *
  * @param <T>
  */
+/**
+ * @author Rafa
+ *
+ * @param <T>
+ */
 public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	
 	//Metadata attributes
@@ -236,8 +241,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	 *
 	 *
 	 *
+	 *
+	 *
+	 *
 	 * 
 	 * VISITOR LOGIC : DATA DEFINITION LANGUAGE
+	 * 
+	 * 
+	 * 
 	 * 
 	 * 
 	 * 
@@ -686,24 +697,336 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return (T)constr;
 	}
 	
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitConstraint(generatedsources.sqlParser.ConstraintContext)
+	 */
+	@Override
+	public Object visitConstraint(sqlParser.ConstraintContext ctx){
+		Constraint constr = (Constraint) this.visit(ctx.constraintType());
+		return (T)constr;
+	}
+	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitLocalIDS(sqlParser.LocalIDSContext)
+	 */
+	@Override
+	public Object visitLocalIDS(sqlParser.LocalIDSContext ctx) {
+		// TODO Auto-generated method stub
+		ArrayList<String> ids = new ArrayList<String>();
+		ids.add(ctx.ID().getText());
+		if (ctx.getChildCount() != 1)
+		{
+			ids.addAll((ArrayList<String>) this.visit(ctx.localIDS()));
+		}
+		return (T)ids;
+	}
+	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitRefIDS(sqlParser.RefIDSContext)
+	 */
+	@Override
+	public Object visitRefIDS(sqlParser.RefIDSContext ctx) {
+		// TODO Auto-generated method stub
+		ArrayList<String> ids = new ArrayList<String>();
+		ids.add(ctx.ID().getText());
+		if (ctx.getChildCount() != 1)
+		{
+			ids.addAll((ArrayList<String>) this.visit(ctx.refIDS()));
+		}
+		return (T)ids;
+		//return super.visitRefIDS(ctx);
+	}
 
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitIdRef(sqlParser.IdRefContext)
+	 */
+	@Override
+	public Object visitIdRef(sqlParser.IdRefContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)ctx.ID().getText();
+		//return super.visitIdRef(ctx);
+	}
+	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitConstraintTypeForeignKey(sqlParser.ConstraintTypeForeignKeyContext)
+	 */
+	@Override
+	public Object visitConstraintTypeForeignKey(sqlParser.ConstraintTypeForeignKeyContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint const_pk = new Constraint(ctx.getChild(0).getText(), "Foreign Key");
+		const_pk.setIDS_local((ArrayList<String>)this.visit(ctx.localIDS()));
+		const_pk.setIDS_refs((ArrayList<String>)this.visit(ctx.refIDS()));
+		const_pk.setId_ref((String)this.visit(ctx.idRef()));
+		return (T)const_pk;
+	}
+	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitConstraintTypePrimaryKey(sqlParser.ConstraintTypePrimaryKeyContext)
+	 */
+	@Override
+	public Object visitConstraintTypePrimaryKey(sqlParser.ConstraintTypePrimaryKeyContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint const_pk = new Constraint(ctx.getChild(0).getText(), "Primary Key");
+		const_pk.setIDS_local((ArrayList<String>)this.visit(ctx.localIDS()));
+		return (T)const_pk;
+	}
 	
 	
 	
 	
+	/**
+	 * VISITOR LOGIC: CHECKS
+	 */
+	public Object visitCompCheck(sqlParser.CompContext ctx){
+		if (ctx instanceof sqlParser.CompIdContext){//tiene los dos ids
+			ArrayList<String> ids = new ArrayList();
+			ids.add((String)visit(ctx.getChild(0)));
+			if (ctx.getChild(2) instanceof sqlParser.NIDContext){
+				ids.add((String)visit(ctx.getChild(2)));
+			}
+			return ids;
+		}else if (ctx instanceof sqlParser.CompLitIdContext){
+			ArrayList<String> ids = new ArrayList();
+			ids.add((String)visit(ctx.getChild(2)));
+			return ids;
+		}
+		return new ArrayList<String>();
+	}
+
+	public Object visitConditionCheck(sqlParser.ConditionContext ctx){
+        
+		if (ctx instanceof sqlParser.ConditionCondContext){
+			//System.out.println("Es conditionCond");
+			ArrayList<String> ids = new ArrayList();
+			ids.addAll((ArrayList<String>)visitConditionCheck((sqlParser.ConditionContext)ctx.getChild(1)));
+			if (ctx.getChildCount() > 3){
+				ids.addAll((ArrayList<String>)visitConditionCheck((sqlParser.ConditionContext)ctx.getChild(4)));
+			}
+			return ids;
+		}else if (ctx instanceof sqlParser.ConditionCompContext){
+			//System.out.println("Es conditioncomp");
+			ArrayList<String> ids = new ArrayList();
+			ids.addAll((ArrayList<String>)visitCompCheck((sqlParser.CompContext)ctx.getChild(0)));
+			if (ctx.getChildCount() > 1){
+				ids.addAll((ArrayList<String>)visitConditionCheck((sqlParser.ConditionContext)ctx.getChild(2)));
+			}
+			return ids;
+		}
+		
+		return visitConditionCheck((sqlParser.ConditionContext)ctx.getChild(1));// es not_logic condition
+	}
 	
 	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext)
+	 */
+	@Override
+	public Object visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint const_check = new Constraint(ctx.getChild(0).getText(), "Check");
+		const_check.setCondition(ctx.condition().getText());
+		ArrayList<String> ids = (ArrayList<String>)visitConditionCheck(ctx.condition());
+		LinkedHashSet<String> ids_noRepetidos = new LinkedHashSet(ids);
+		ids = new ArrayList(ids_noRepetidos);
+		const_check.setIDS_local(ids);
+		
+		return (T)const_check;
+		//return super.visitConstraintTypeCheck(ctx);
+	}
 	
+	///////////////////////////////////////////////
+	///////////////////////////////////////////////
+	/////////////END OF CHECKS
+	///////////////////////////////////////////////
+	//////////////////////////////////////////////
+	/**
+	 * VISITOR LOGIC: LOGICAL STATEMENTS
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitExp_logic(generatedsources.sqlParser.Exp_logicContext)
+	 */
+	@Override
+	public Object visitExp_logic(sqlParser.Exp_logicContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)this.visit(ctx.logic());
+	}
 	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitLogic_and(sqlParser.Logic_andContext)
+	 */
+	@Override
+	public Object visitLogic_and(sqlParser.Logic_andContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)"AND";
+	}
 	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitLogic_not(sqlParser.Logic_notContext)
+	 */
+	@Override
+	public Object visitLogic_not(sqlParser.Logic_notContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)"NOT";
+	}
 	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitLogic_or(sqlParser.Logic_orContext)
+	 */
+	@Override
+	public Object visitLogic_or(sqlParser.Logic_orContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)"OR";
+	}
+	/**
+	 * VISITOR LOGIC: ATTRIBUTE TYPE
+	 */
 	
-	
-	
-	
-	
-	
-	
-	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitTipo_lit_date(sqlParser.Tipo_lit_dateContext)
+	 */
+	@Override
+	public Object visitTipo_lit_date(sqlParser.Tipo_lit_dateContext ctx) {
+		// TODO Auto-generated method stub
+		Attribute date_attr = new Attribute("", "date");
+		return (T) date_attr;
+	}
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitTipo_lit_char(sqlParser.Tipo_lit_charContext)
+	 */
+	@Override
+	public Object visitTipo_lit_char(sqlParser.Tipo_lit_charContext ctx) {
+		// TODO Auto-generated method stub		
+		Attribute char_attr = new Attribute("", "char", Integer.valueOf(ctx.INT().getText()));
+		return (T) char_attr;
+	}
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitTipo_lit_float(sqlParser.Tipo_lit_floatContext)
+	 */
+	@Override
+	public Object visitTipo_lit_float(sqlParser.Tipo_lit_floatContext ctx) {
+		// TODO Auto-generated method stub
+		Attribute float_atr = new Attribute("", "float");
+		return (T) float_atr;
+		//return super.visitTipo_lit_float(ctx);
+	}
+
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitTipo_lit_int(sqlParser.Tipo_lit_intContext)
+	 */
+	@Override
+	public Object visitTipo_lit_int(sqlParser.Tipo_lit_intContext ctx) {
+		// TODO Auto-generated method stub
+		Attribute int_atr = new Attribute("", "int");
+		return (T) int_atr;
+		//return super.visitTipo_lit_int(ctx);
+	}	
+	/**
+	 * VISITOR LOGIC: ALTER TABLE ADD COLUMN
+	 */
+
+	@Override
+	public Object visitAlterAddColumn(sqlParser.AlterAddColumnContext ctx){
+		String tabID = (String) this.visit(ctx.idTable());
+		String colID = (String) this.visit(ctx.idColumn());
+		
+		// Verifies used database
+		if(this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+			//Verifies table exists
+			if (this.getCurrent().existTable(tabID))
+			{
+				Table mod = this.getCurrent().getTable(tabID);
+				ArrayList<String> attr_names = mod.getattributesNames();
+				Attribute attr = (Attribute) this.visit(ctx.tipo_literal());
+				attr.setId(colID);
+				boolean insertAttr = mod.canAddAttribute(attr);
+				//if constraint aint null
+				if (ctx.constraint() != null)
+				{
+					//gets the constraint
+					Constraint constr = (Constraint) this.visit(ctx.constraint());
+					boolean  insertConstr = mod.canAddConstraint(constr);
+					
+					//Verifies both 
+					if (insertAttr && insertConstr)
+					{
+						//Validation
+						int errores = 0;
+						//Local IDS belong to the table
+						ArrayList<String> ids = constr.getIDS_local();
+						for (String i: ids)
+						{
+							if(!attr_names.contains(i))
+							{
+								if (! i.equals(colID))
+								{
+									String local_id_not_found = "The attribute \""+ i+ "\" from the " + constr.gettype() + " \""+ constr.getId() + "\" is not declared in table \"" + mod.getName() + "\" @line: " + ctx.getStop().getLine();
+									this.errors.add(local_id_not_found);
+									errores++;
+								}
+							}
+						}
+						switch (constr.gettype())
+						{
+						case "Primary Key":
+							if(! mod.getPrimaryKeys().isEmpty())
+							{
+								String multiplePk = "A table cant have more than one Primary Key @line "+ ctx.getStop().getLine();
+								this.errors.add(multiplePk);
+								errores++;
+							}
+							break;
+						case "Foreign Key":
+							if (!this.getCurrent().existTable(constr.getId_ref()))
+							{
+								String table_not_found = "The table \"" + constr.getId_ref() + "\" that references the Foreign Key \"" +constr.getId() + "\" is not declared @line" + ctx.getStop().getLine();
+								this.errors.add(table_not_found);
+								errores++
+							}
+							else
+							{
+								Table table_ref = this.getCurrent().getTable(constr.getId_ref());
+								for (String j: constr.getIDS_refs())
+								{
+									if (! table_ref.hasAttribute(j))
+									{
+										String ref_if_not_found = "The attribute \"" + j + "\" is not declared in Table \"" + constr.getId_ref() + "\" that references Foreign Key \"" + constr.getId() + "\" @line: " + ctx.getStop().getLine();
+										this.errors.add(ref_if_not_found);
+										errores++;
+									}
+								}
+							}
+							break;
+						case "Check":	
+						}
+					}
+				}
+			}
+		}
+	}
 }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+
 	
