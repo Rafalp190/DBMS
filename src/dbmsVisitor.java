@@ -1078,6 +1078,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	/**
 	 * VISITOR LOGIC: ALTER TABLE ADD CONSTRAINT
 	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitAlterAddConstraint(generatedsources.sqlParser.AlterAddConstraintContext)
+	 */
 	@Override
 	public Object visitAlterAddConstraint(sqlParser.AlterAddConstraintContext ctx){
 		String tabID =(String) this.visit(ctx.idTable());
@@ -1140,13 +1143,321 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						break;
 					case "Foreign Key":
 						//Referenced IDS
+						if (!this.getCurrent().existTable(con.getId_ref()))
+						{
+							String tabNotFound = "The table \"" + con.getId_ref() + "\" referenced by the Foreign Key \"" + con.getId() + "\" is not declared in the DataBase \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+							this.errors.add(tabNotFound);
+							errores++;
+						}
+						else 
+						{
+							Table refTab = this.getCurrent().getTable(con.getId_ref());
+							for (String j: con.getIDS_refs())
+								if(!refTab.hasAttribute(j))
+								{
+									String refID_notfound = "The attribute \"" + j + "\" is not daclared in the table \"" +con.getId_ref()+ "\" that references the Foreign Key \"" + con.getId() + "\" @line: " + ctx.getStop().getLine();
+									this.errors.add(refID_notfound);
+									errores++;
+								}
+						}
+						break;
+					case "Check":
+						table = new Table(mod);
+						table.setData(new ArrayList<ArrayList<String>>());
 						
+						//Configure the antlr Input Stream and tokens
+						ANTLRInputStream input = new ANTLRInputStream(con.getCondition());
+						sqlLexer lexer = new sqlLexer(input);
+						CommonTokenStream tokens = new CommonTokenStream(lexer);
+						sqlParser parser = new sqlParser(tokens);
+						ParseTree tree = parser.condition();
+						
+						Object obj = (Object) visit(tree);
+						if (obj == null)
+						{
+							String check_ = "Check: " + con.getId() +"Not defined correctly @line: " + ctx.getStop().getLine();
+							this.errors.add(check_);
+							errores++;
+						}
+						break;
+					}
+					
+					if (errores == 0)
+					{
+						//Adds constraint
+						mod.addConstraint(con);
+						if (con.gettype().equals("Foreign Key"))
+							this.getCurrent().addRef(con.getId_ref());
+						System.out.println("Constraint \"" + con.getId() + "\" added succesfully to the table \"" + mod.getName()+"\"");
+						this.messages.add("Constraint \"" + con.getId() + "\" added succesfully to the table \"" + mod.getName() + "\"");
+					}
+				}
+				else
+				{
+					if (!insertConstraint)
+					{
+						String constraint_repeated = "Can't add constraint \"" + con.getId() + "\" because one with the same name already exists @line: " +ctx.getStop().getLine();
+						this.errors.add(constraint_repeated);
 					}
 				}
 			}
+			else
+			{
+				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
+				this.errors.add(table_not_found);
+			}
+		}	
+		return (T)"";
+	}
+	/**
+	 * VISITOR LOGIC: ALTER TABLE DROP COLUMN
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitAlterDropColumn(generatedsources.sqlParser.AlterDropColumnContext)
+	 */
+	@Override
+	public Object visitAlterDropColumn(sqlParser.AlterDropColumnContext ctx){
+		String tabID = (String) this.visit(ctx.idTable());
+		String colID = (String) this.visit(ctx.idColumn());
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+			//Verfies if table exists
+			if (this.getCurrent().existTable(tabID))
+			{
+				Table mod = this.getCurrent().getTable(tabID);
+				ArrayList<String> attr_names = mod.getattributesNames();
+				if (attr_names.contains(colID))
+				{
+					int errores = 0;
+					ArrayList<Constraint> pks = mod.getPrimaryKeys();
+					if (!pks.isEmpty())
+					{
+						Constraint pk = pks.get(0);
+						ArrayList<String> locals = pk.getIDS_local();
+						if (locals.contains(colID))
+						{
+							int index = locals.indexOf(colID);
+							locals.remove(index);
+							this.messages.add("The attribute \"" + colID +"\" has been successfully deleted from the Primary key \"" + pk.getId() +"\"");
+						}
+					}
+					// Checks
+					ArrayList<Constraint> cks = mod.getChecks();
+					if (cks.isEmpty())
+					{
+						for (Constraint i: cks)
+						{
+							ArrayList<String> locals = i.getIDS_local();
+							if (locals.contains(colID))
+							{
+								String delete_check_first = "The Check \"" + i.getId() +"\" contains the attribute \"" + colID + "\". DROP the CONSTRAINT first before deleting the attribute @line: " +ctx.getStop().getLine();
+								this.errors.add(delete_check_first);
+								errores++;
+							}
+						}
+					}
+					// Referencing FK from other tables
+					if (this.getCurrent().existRef(tabID)){
+						for (Table t: this.getCurrent().getTables())
+							if (! t.getName().equals(tabID))
+								for (Constraint c: t.getForeignKey())
+								{
+									ArrayList<String> ref = c.getIDS_refs();
+									if (ref.contains(colID))
+									{
+										String delete_fk_first = "The foreing key \""+ c.getId() + "\" from the Table \"" + t.getName() + "\" contains the Attribute \"" + colID + "\" that you are trying to delete. Perform the necesary DROP CONSTRAINT before proceeding. @line: " + ctx.getStop().getLine();
+										this.errors.add(delete_fk_first);
+										errores++;
+									}
+								}
+					}
+					if (errores == 0)
+					{
+						mod.deleteAttribute(colID);
+						System.out.println("Attribute \"" + colID + "\" deleted successfully from Table \"" + tabID +"\"");
+						this.messages.add("Attribute \"" + colID + "\" deleted successfully from Table \"" + tabID +"\"");
+					}
+				}
+				else
+				{
+					String attr_not_found = "Attribute: \"" + colID + "\" does not exist in Table \"" + mod.getName() + "\" @line: " +ctx.getStop().getLine();
+					this.errors.add(attr_not_found);
+				}
+			}
+			else
+			{
+				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
+				this.errors.add(table_not_found);
+			}
+				
 		}
 		return (T)"";
 	}
+	/**
+	 * VISITOR LOGIC: ALTER TABLE DROP CONSTRAINT
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitAlterDropConstraint(generatedsources.sqlParser.AlterDropConstraintContext)
+	 */
+	@Override
+	public Object visitAlterDropConstraint(sqlParser.AlterDropConstraintContext ctx){
+		String tabID = (String) this.visit(ctx.idTable());
+		String conID = (String) this.visit(ctx.idConstraint());
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+			if (this.getCurrent().existTable(tabID))
+			{
+				Table mod = this.getCurrent().getTable(tabID);
+				if (mod.existeConstraint(conID))
+				{
+					Constraint drop = mod.getConstraint(conID);
+					if(drop.gettype().equals("Foreign Key"))
+					{
+						int cont = 0;
+						for (Table t: this.getCurrent().getTables())
+							if (!t.getName().equals(tabID))
+							{
+								for (Constraint c: t.getForeignKey())
+									if(c.getId_ref().equals(drop.getId_ref()))
+									{
+										cont++;
+										break;
+									}
+							}
+						if (cont == 0)
+							this.getCurrent().deleteRef(drop.getId_ref());
+						
+					}
+					mod.deleteConstraint(drop);
+					System.out.println("Constraint \"" + conID + "\" deleted successfully from Table \"" + tabID +"\"");
+					this.messages.add("Constraint \"" + conID + "\" deleted successfully from Table \"" + tabID +"\"");
+				}
+				else
+				{
+					String con_not_found = "Consraint: \"" + conID + "\" does not exist in Table \"" + mod.getName() + "\" @line: " +ctx.getStop().getLine();
+					this.errors.add(con_not_found);
+				}
+			}
+			else
+			{
+				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
+				this.errors.add(table_not_found);
+			}
+		}
+		return (T)"";	
+	}
+	
+	/**
+	 * VISITOR LOGIC: ID TABLE 
+	 */
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitIdTable(sqlParser.IdTableContext)
+	 */
+	@Override
+	public Object visitIdTable(sqlParser.IdTableContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)ctx.ID().getText();
+		
+	}
+	/**
+	 * VISITOR LOGIC: ID COLUMN
+	 */
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitIdColumn(sqlParser.IdColumnContext)
+	 */
+	@Override
+	public Object visitIdColumn(sqlParser.IdColumnContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)ctx.ID().getText();
+		
+	}
+	/**
+	 * VISITOR LOGIC: ID CONSTRAINT
+	 */
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitIdConstraint(sqlParser.IdConstraintContext)
+	 */
+	@Override
+	public Object visitIdConstraint(sqlParser.IdConstraintContext ctx) {
+		// TODO Auto-generated method stub
+		return (T)ctx.ID().getText();
+	}
+	/**
+	 * VISITOR LOGIC: SHOW COLUMN FROM
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitShow_column_statement(generatedsources.sqlParser.Show_column_statementContext)
+	 */
+	@Override
+	public T visitShow_column_statement(sqlParser.Show_column_statementContext ctx){
+		//SHOW COLUMNS FROM ID (comprobar use database, id contenido en database)
+		
+		if (this.getCurrent().getName().isEmpty()){
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}else{
+			String ID = ctx.getChild(3).getText();
+			Table tb = getCurrent().getTable(ID);
+			if (tb == null){
+				String no_database_in_use = "There is no Table " +ID+" in the database " +this.getCurrent().getName()+" @line: " + ctx.getStop().getLine();
+	        	this.errors.add(no_database_in_use);
+	        	//System.out.println("error de tabla");
+			}else{
+				return (T)tb;
+			}
+		}
+		
+		return (T)new String();
+	}
+	/**
+	 * VISITOR LOGIC: SHOW SCHEMA
+	 */
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitShow_schema_statement(generatedsources.sqlParser.Show_schema_statementContext)
+	 */
+	@Override
+	public T visitShow_schema_statement(sqlParser.Show_schema_statementContext ctx){
+		return (T)schema;
+	}
+	/**
+	 * VISITOR LOGIC: SHOW TABLES
+	 */
+	@Override
+	public T visitShow_table_statement(sqlParser.Show_table_statementContext ctx){
+		//SHOW TABLES (comprobar use database)
+		if (this.getCurrent().getName().isEmpty()){
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}else{
+			
+			ArrayList<Attribute> atr = new ArrayList();
+			atr.add(new Attribute("Tables"));
+			
+			ArrayList<ArrayList<String>> values = new ArrayList();
+			for (Table tb: getCurrent().getTables()){
+				ArrayList<String> val = new ArrayList();
+				val.add(tb.getName());
+				values.add(val);
+			}
+			Table tb1 = new Table(getCurrent().getName());
+			tb1.setattributes(atr);
+			tb1.setData(values);
+			return (T) tb1;
+		}
+		return (T) new String();
+	}
+
+	
 }
 	
 	
