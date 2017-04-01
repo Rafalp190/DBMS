@@ -1900,7 +1900,10 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	/**************************
 	 * INSERT
 	 **************************/
-	
+	@Override
+	public Object visitInsert_value(sqlParser.Insert_valueContext ctx){
+		return null;
+	}
 }
 	
 	
