@@ -1,5 +1,6 @@
 import java.awt.BorderLayout;
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -24,6 +25,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
 import javax.swing.JToolBar;
@@ -34,6 +36,7 @@ import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.DefaultStyledDocument;
 import javax.swing.undo.UndoManager;
 
+import views.TextLineNumber;
 import views.Tree;
 
 import java.nio.file.Files;
@@ -281,12 +284,12 @@ public class DBMSgui extends JFrame implements ActionListener {
 		btnDelete.setToolTipText("Delete all text from editor");
 		try{
 			Image img = ImageIO.read(getClass().getClassLoader().getResource("imagenes/erase.png"));
-			btnRun.setIcon(new ImageIcon(img));
-			btnRun.setText("");
+			btnDelete.setIcon(new ImageIcon(img));
+			btnDelete.setText("");
 			Border emptyBorder = BorderFactory.createEmptyBorder();
-			btnRun.setBorder(emptyBorder);
+			btnDelete.setBorder(emptyBorder);
 		} catch (Exception e){
-			System.out.println("Error in imagenes/play.png");
+			System.out.println("Error in imagenes/erase.png");
 		}
 		toolBar.add(btnDelete);
 		
@@ -294,6 +297,19 @@ public class DBMSgui extends JFrame implements ActionListener {
 		/*
 		JSplitPane splitpane = new JSplitPane();
 		splitpane.setRightComponent(splitpane);*/
+		
+		
+		JTextArea textArea = new JTextArea(20,120);
+		textArea.setFont(new Font("Monoespaced",Font.PLAIN,12));
+		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		this.getContentPane().add(scroll,BorderLayout.CENTER);
+		
+		TextLineNumber tln = new TextLineNumber(textArea);
+		scroll.setRowHeaderView(tln);
+		
+		
+		
+		
 		
 	}
 
@@ -338,5 +354,19 @@ public class DBMSgui extends JFrame implements ActionListener {
         }
 	}
 
+	/*public String NumerosText(JTextArea textArea){
+		
+		int counter = 0;
+	    int caretPosition = textArea.getDocument().getLength();
+	    Element root = textArea.getDocument().getDefaultRootElement();
+	    StringBuilder lineNumbersTextBuilder = new StringBuilder();
+	    lineNumbersTextBuilder.append("1").append(System.lineSeparator());
 
+	    for (int elementIndex = 2; elementIndex < root.getElementIndex(caretPosition) +2; 
+	        elementIndex++)
+	    {
+	        lineNumbersTextBuilder.append(elementIndex).append(System.lineSeparator());
+	    }
+	    return lineNumbersTextBuilder.toString();
+	}*/
 }
