@@ -1,4 +1,5 @@
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
@@ -55,10 +56,10 @@ public class DBMSgui extends JFrame implements ActionListener {
 	JFileChooser fileChooser;
 	UndoManager undoManager;
 	File file;
+	JTextArea textArea, OutputArea, verboseArea;
+	JTabbedPane tabbedPane;
 	
-	/**
-	 * Launch the application.
-	 */
+	
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
@@ -292,14 +293,8 @@ public class DBMSgui extends JFrame implements ActionListener {
 			System.out.println("Error in imagenes/erase.png");
 		}
 		toolBar.add(btnDelete);
-		
-		//clavo aqui
-		/*
-		JSplitPane splitpane = new JSplitPane();
-		splitpane.setRightComponent(splitpane);*/
-		
-		
-		JTextArea textArea = new JTextArea(20,120);
+			
+		textArea = new JTextArea(20,120);
 		textArea.setFont(new Font("Monoespaced",Font.PLAIN,12));
 		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		this.getContentPane().add(scroll,BorderLayout.CENTER);
@@ -307,6 +302,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		TextLineNumber tln = new TextLineNumber(textArea);
 		scroll.setRowHeaderView(tln);
 		
+		tabbedPane = new JTabbedPane();
 		
 		
 		
@@ -319,11 +315,73 @@ public class DBMSgui extends JFrame implements ActionListener {
 		if (e.getSource() == miOpen ||
 				e.getSource() == btnOpen){
 			open();
-	        
+		}else if (e.getSource() == miSave ||
+				e.getSource() == btnSave){
+			save();
+		}else if (e.getSource() == miSaveAs){
+			saveAs();
+			//explorer.revalidate();
+			//explorer.repaint();
+			//addTreeSelection(explorer.getTree());
+		}else if (e.getSource() == miUndo ||
+				e.getSource() == btnUndo){
+			undo();
+		}else if (e.getSource() == miRedo ||
+				e.getSource() == btnRedo){
+			redo();
+		}else if (e.getSource() == miRun ||
+				e.getSource() == btnRun){
+			run();
+			//explorer.revalidate();
+			//explorer.repaint();
+			//addTreeSelection(explorer.getTree());
+		}else if (e.getSource() == miComment){
+			comment();
+		}else if (e.getSource() == btnDelete){
+			textArea.setText("");
 		}
+			
+	}
+		
+	
+	private void redo() {
+		// TODO Auto-generated method stub
+		try{
+			undoManager.redo();
+		}catch (Exception e){
+			//to do
+		}
+	}
+
+	private void comment() {
+		// TODO Auto-generated method stub
 		
 	}
-	
+
+	private void run() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private void undo() {
+		// TODO Auto-generated method stub
+		try{
+			undoManager.undo();
+		}catch (Exception e){
+			//to do
+		}
+	}
+
+	private void saveAs() {
+		// TODO Auto-generated method stub
+		
+	}
+
+	private void save() {
+		// TODO Auto-generated method stub
+		
+	}
+
 	public void open(){
 		int returnVal = fileChooser.showOpenDialog(this);
         
@@ -354,19 +412,5 @@ public class DBMSgui extends JFrame implements ActionListener {
         }
 	}
 
-	/*public String NumerosText(JTextArea textArea){
-		
-		int counter = 0;
-	    int caretPosition = textArea.getDocument().getLength();
-	    Element root = textArea.getDocument().getDefaultRootElement();
-	    StringBuilder lineNumbersTextBuilder = new StringBuilder();
-	    lineNumbersTextBuilder.append("1").append(System.lineSeparator());
 
-	    for (int elementIndex = 2; elementIndex < root.getElementIndex(caretPosition) +2; 
-	        elementIndex++)
-	    {
-	        lineNumbersTextBuilder.append(elementIndex).append(System.lineSeparator());
-	    }
-	    return lineNumbersTextBuilder.toString();
-	}*/
 }
