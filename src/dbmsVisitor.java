@@ -225,9 +225,163 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public void setCurrent(DataBase current) {
 		this.current = current;
 	}
+	
+	public boolean PrimaryKey(ArrayList<String> fila, Integer indice)
+	{
+		ArrayList<Constraint> key = this.table.getPrimaryKeys();
+		
+		ArrayList<Integer> primary = new ArrayList<Integer>();
+		
+		if (key.size() != 0)
+		{
+			Constraint llave = key.get(0);
+			for (String id : llave.getIDS_local())	
+			{
+				Attribute atr = this.table.getID(id);
+				primary.add(this.table.getattributes().indexOf(atr));
+			}
+			
+			int i=0;
+			for (ArrayList<String> newfila:this.table.getData())
+			{
+				int cont=0;
+				for (int index : primary)
+				{
+					if (newfila.get(index).equals(fila.get(index)))
+					{
+						cont++;
+					}
+				}
+				if (cont == primary.size())
+				{
+					if (indice!=-1)
+					{
+						if (indice!= i)
+						{
+							return false;
+						}
+					}
+					else
+						return false;
+				}
+				i++;
+			}
+		}
+		
+		return true;
+	}
+	
+	
+	//devuelve si la llave foreana existe en la/las otras tablas
+	public boolean ForeignKey(ArrayList<String> fila, Integer indice)
+	{
+		ArrayList<Constraint> key = this.table.getForeignKey();
+		
+		int exist = 0;
+		for (Constraint llave : key)
+		{
+			//tengo que ir a traer la tabla a la que hacen referencia
+			//recorrer la tabla y ver si el valor en la fila en el indice del id local existe en la tabla
+			//aumento un contador
+			//si el contador al final es igla al total de constraints devuelve true 
+			Table ref_tabla = this.current.getTable(llave.getId_ref());
+			if (ref_tabla != null)
+			{
+				int index = 0;
+				int cont = 0;
+				for (String id : llave.getIDS_refs()) 
+				{
+					//Traemos el attribute de la tabla a la que hacemos referencia
+					//Y el indice de esta en la tabla
+					Attribute atr = ref_tabla.getID(id);
+					int index_ref = ref_tabla.getattributes().indexOf(atr);
+					
+					//Traems el attribute de la tabla local
+					//Y el indice de este en la tabla
+					String local = llave.getIDS_local().get(index);
+					Attribute atr2 = this.table.getID(local);
+					int index_loc = this.table.getattributes().indexOf(atr2);
+					
+					for (ArrayList<String> row:ref_tabla.getData())
+					{
+						if(row.get(index_ref).equals(fila.get(index_loc)))
+						{
+							cont++;
+						}
+					}
+					
+					index++;
+				}
+				if (cont != llave.getIDS_refs().size())
+					return false;
+				else
+					exist++;
+			}
+			else
+				return false;
+		}
+		
+		if (exist == key.size())
+			return true;
+		else
+			return false;
+	}
+
+	/**
+	 * CARTESIAN JOIN TO USE IN FROM STATEMENT
+	 * 
+	 * @param tb1
+	 * @param tb2
+	 * @return
+	 */
+	public Table CartesianCross(Table tb1, Table tb2){
+		//tb1.setNameByTable(); ya estan mezclados
+		tb2.setNamesByTable();
+		Table nTb = new Table();
+		
+		nTb.setName("Select");
+		
+		//agregamos todos los atributos
+		ArrayList<Attribute> at = new ArrayList();
+		at.addAll(tb1.getattributes());
+		at.addAll(tb2.getattributes());
+		nTb.setattributes(at);
+		
+		//agregamos nuevos nombres tabla.atributo
+		ArrayList<String> otN = new ArrayList();
+		otN.addAll(tb1.getOthersIds());
+		otN.addAll(tb2.getOthersIds());
+		nTb.setOthersIds(otN);
+		
+		//Cross Join of Data
+		ArrayList<ArrayList<String>> data = new ArrayList();
+		for (ArrayList<String> tupla1: tb1.getData()){
+			for (ArrayList<String> tupla2: tb2.getData()){
+				ArrayList<String> tupla = new ArrayList();
+				tupla.addAll(tupla1);
+				tupla.addAll(tupla2);
+				data.add(tupla);
+			}
+		}
+		nTb.setData(data);
+		return nTb;
+	}
+	
+	
 
 /**
+ * 
+ * 
+ * 
+ * 
+ * 
  * VISITOR LOGIC
+ *
+ *
+ *
+ *
+ *
+ *
  */
 	public Object visitSql2003Parser (sqlParser.Sql2003ParserContext ctx){
 		Object obj = visitChildren(ctx);
@@ -1452,11 +1606,300 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			Table tb1 = new Table(getCurrent().getName());
 			tb1.setattributes(atr);
 			tb1.setData(values);
-			return (T) tb1;
+			return (T)tb1;
 		}
-		return (T) new String();
+		return (T)new String();
+	}
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitNID(generatedsources.sqlParser.NIDContext)
+	 */
+	@Override
+	public Object visitNID( sqlParser.NIDContext ctx){
+		if (ctx.getChildCount() <= 1) return ctx.getChild(0).getText();
+	
+		return ctx.getChild(0).getText()+"."+ctx.getChild(2).getText();
+	}
+	
+	public Object visitNlocalIDS (sqlParser.NlocalIDSContext ctx){
+		if (ctx.getChildCount() <= 1){
+			ArrayList<String> ar = new ArrayList();
+			ar.add((String)visitChildren(ctx));
+			return ar;
+		}
+		
+		ArrayList<String> ar = new ArrayList();
+		ar.add((String) visit(ctx.getChild(0)));
+		ar.addAll((ArrayList<String>)visit(ctx.getChild(2)));
+		return ar;		
+	}
+	
+	public Object checkDuplicates (ArrayList<String> tables){
+		LinkedHashSet<String> ntables = new LinkedHashSet(tables);
+		LinkedHashSet<String> dup = new LinkedHashSet();
+		for (String st: ntables){
+			if (dup.contains(st)){
+				return st;
+			}
+			dup.add(st);
+		}
+		return "";
+	}
+	
+	@Override
+	public Object visitLiteral(sqlParser.LiteralContext ctx) {
+		
+		if (ctx.getChild(0).getText().toUpperCase().equals("NULL"))
+			return "NULL";
+		else
+			return this.visit(ctx.getChild(0));
+		
 	}
 
+	/****************************
+	 * Recibimos un numero
+	 * Si este contiene un punto
+	 * quitamos todo lo que este despues del punto
+	 ****************************/
+	@Override 
+	public T visitInt_literal(@NotNull sqlParser.Int_literalContext ctx) 
+	{ 
+		String num = ctx.INT().getText();
+		
+		if (num.contains("."))
+		{
+			int index = num.indexOf('.');
+			num = num.substring(0, index);
+		}
+		
+		return (T)"int"; 
+	}
+	
+	
+	/****************************
+	 * Recibimos un numero
+	 * Si este no contiene punto
+	 * le agregamos .0
+	 ****************************/
+	@Override 
+	public T visitFloat_literal(@NotNull sqlParser.Float_literalContext ctx) 
+	{ 
+		String num = ctx.INT(0).getText();
+		
+		if (!num.contains("."))
+		{
+			num += ".0";
+		}
+		
+		return (T)"float"; 
+	}
+	
+	
+	/******************************************
+	 * -MONTH-DAY
+	 * 1<=MONTH<=12
+	 * Validamos el dia segun el mes y el año
+	 *******************************************/
+	@Override 
+	public T visitDate_literal(@NotNull sqlParser.Date_literalContext ctx) 
+	{ 
+		String fecha = ctx.DATE().getText(); 
+		
+		fecha = fecha.replace("'", "");
+		
+		String[] date = fecha.split("-");
+		
+		int year = Integer.parseInt(date[0]);
+		int mes = Integer.parseInt(date[1]);
+		int dia = Integer.parseInt(date[2]);
+		
+		String tipo = "Error";
+		
+		if (1 <= mes && mes<= 12 && dia>=1)
+		{
+			if (leap(year))
+			{
+				if (mes == 2)
+				{
+					if (dia<=29)
+					{
+						tipo = "date";
+					}
+				}
+				else
+				{
+					if (dia<=maxday(mes))
+					{
+						tipo = "date";
+					}
+				}
+			}
+			else
+			{
+				if (mes == 2)
+				{
+					if (dia<=28)
+					{
+						tipo = "date";
+					}
+				}
+				else
+				{
+					if (dia<=maxday(mes))
+					{
+						tipo = "date";
+					}
+				}
+			}
+		}
+		
+		return (T)tipo; 
+	}
+	
+	
+	/****************************
+	 * Recibimos un texto
+	 * Debemos revisar el tamaño de este texto
+	 ****************************/
+	@Override 
+	public T visitChar_literal(@NotNull sqlParser.Char_literalContext ctx) 
+	{ 
+		String text = ctx.CHAR().getText();
+		
+		text = text.substring(1, text.length() - 1);
+		
+		int length = text.length();
+		
+		return (T)"char";
+	}
+	
+	
+	/******************
+	 * @param year
+	 * @return
+	 */
+	public boolean leap(int year)
+	{
+		return (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
+	}
+	
+	
+	/************************
+
+	 * @param mes
+	 * @return
+	 */
+	public int maxday(int mes)
+	{
+		int dia = 0;
+		
+		if (mes == 1 || dia == 3 || dia == 5 || dia == 7 || dia == 8 || dia == 10 || dia == 12)
+			dia = 31;
+		else
+			dia = 30;
+		
+		return dia;
+	}
+	
+	public String compareDate(String date1, String date2)
+	{
+		date1.replaceAll("'", "");
+		date2.replaceAll("'", "");
+		
+		String valor1[] = date1.split("-");
+		String valor2[] = date2.split("-");
+		
+		if (Integer.parseInt(valor1[0])<Integer.parseInt(valor2[0]))
+		{
+			return "menor";
+		}
+		else
+		{
+			if (Integer.parseInt(valor1[0])>Integer.parseInt(valor2[0]))
+			{
+				return "mayor";
+			}
+			else
+			{
+				if (Integer.parseInt(valor1[1])<Integer.parseInt(valor2[1]))
+				{
+					return "menor";
+				}
+				else
+				{
+					if (Integer.parseInt(valor1[1])>Integer.parseInt(valor2[1]))
+					{
+						return "mayor";
+					}
+					else
+					{
+						if (Integer.parseInt(valor1[2])<Integer.parseInt(valor2[2]))
+						{
+							return "menor";
+						}
+						else
+						{
+							if (Integer.parseInt(valor1[2])>Integer.parseInt(valor2[2]))
+							{
+								return "mayor";
+							}
+							else
+							{
+								return "igual";
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	public boolean checkDate(String date)
+	{
+		if (!date.contains("-"))
+		{
+			return false;
+		}
+		else
+		{
+			String fecha[] = date.split("-");
+			
+			int size = fecha.length;
+			if (size!=3)
+				return false;
+			else
+			{
+				fecha[0].replaceAll("'", "");
+				fecha[2].replaceAll("'", "");
+				if(fecha[0].length() >4 && fecha[1].length() > 2 && fecha[2].length()>2)
+				{
+					return false;
+				}
+				else
+				{
+					//revisar que sean fechas validas
+					return true;
+				}
+			}	
+		}	
+	}
+	/**
+	 * 
+	 * 
+	 * 
+	 * 
+	 * 
+	 * VISITOR LOGIC: DATA MODELING LANGUAGE
+	 * 
+	 * 
+	 * 
+	 * 
+	 * 
+	 * 
+	 */
+
+	/**************************
+	 * INSERT
+	 **************************/
 	
 }
 	
