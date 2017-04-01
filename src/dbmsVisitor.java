@@ -924,6 +924,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	 * VISITOR LOGIC: ALTER TABLE ADD COLUMN
 	 */
 
+	/* (non-Javadoc)
+	 * @see generatedsources.sqlBaseVisitor#visitAlterAddColumn(generatedsources.sqlParser.AlterAddColumnContext)
+	 */
 	@Override
 	public Object visitAlterAddColumn(sqlParser.AlterAddColumnContext ctx){
 		String tabID = (String) this.visit(ctx.idTable());
@@ -986,7 +989,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							{
 								String table_not_found = "The table \"" + constr.getId_ref() + "\" that references the Foreign Key \"" +constr.getId() + "\" is not declared @line" + ctx.getStop().getLine();
 								this.errors.add(table_not_found);
-								errores++
+								errores++;
 							}
 							else
 							{
@@ -1002,12 +1005,147 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								}
 							}
 							break;
-						case "Check":	
+						case "Check":
+							table = new Table(mod);
+							table.setData(new ArrayList<ArrayList<String>>());
+							
+							ANTLRInputStream input = new ANTLRInputStream(constr.getCondition());
+							sqlLexer lexer = new sqlLexer(input);
+							CommonTokenStream tokens = new CommonTokenStream(lexer);
+							sqlParser parser = new sqlParser(tokens);
+							ParseTree tree = parser.condition();
+							
+							Object obj = (Object) visit(tree);
+							if (obj == null)
+							{
+								String check_ = "Check: " + constr.getId()+ " not defined correctly @line: " + ctx.getStop().getLine();
+								this.errors.add(check_);
+								errores++;
+							}
+							break;
 						}
+						if (errores == 0)
+						{
+							mod.addConstraint(constr);
+							if (constr.gettype().equals("Foreign Key"))
+							{
+								this.getCurrent().addRef(constr.getId_ref());			
+							}
+							System.out.println("Constraint \"" + constr.getId() + "\" added succesfully to the table \"" + mod.getName()+"\"");
+							this.messages.add("Constraint \"" + constr.getId() + "\" added succesfully to the table \"" + mod.getName() + "\"");
+						}
+					}
+					else
+					{
+						//Report errors
+						if (!insertAttr)
+						{
+							String column_repeated ="Column can't be added \"" + colID+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
+							this.errors.add(column_repeated);
+						}
+						if (! insertConstr)
+						{
+							String constraint_repeated = "Constraint can't be added \"" + constr.getId()+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
+							this.errors.add(constraint_repeated);
+							
+						}
+					}
+				}
+				else
+				{
+					if (insertAttr)
+					{
+						mod.addAttribute(attr);
+						System.out.println("Column \"" + colID + "\" added succesfully to the table \"" + mod.getName()+"\"");
+						this.messages.add("Column \"" + colID + "\" added succesfully to the table \"" + mod.getName() + "\"");
+					}
+					else
+					{
+						String column_repeated ="Column can't be added \"" + colID+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
+						this.errors.add(column_repeated);
+					}
+				}
+			}
+			else
+			{			
+				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
+				this.errors.add(table_not_found);
+					
+			}
+		}
+		return (T)"";
+	}
+	/**
+	 * VISITOR LOGIC: ALTER TABLE ADD CONSTRAINT
+	 */
+	@Override
+	public Object visitAlterAddConstraint(sqlParser.AlterAddConstraintContext ctx){
+		String tabID =(String) this.visit(ctx.idTable());
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+			//Check if table exists
+			if (this.getCurrent().existTable(tabID))
+			{
+				Table mod = this.getCurrent().getTable(tabID);
+				ArrayList<String> attr_names = mod.getattributesNames();
+				
+				//Get constraint
+				Constraint con = (Constraint) this.visit(ctx.constraint());
+				boolean insertConstraint = mod.canAddConstraint(con);
+				//Check if constraint can be added 
+				if (insertConstraint)
+				{
+					//Check for constraint errors
+					int errores = 0;
+					
+					//Local Ids belong to table
+					ArrayList<String> ids = con.getIDS_local();
+					for (String i: ids)
+						if(!attr_names.contains(i))
+						{
+							String local_id_not_found = "The attribute \""+ i+ "\" from the " +con.gettype() + "\""+con.getId() + "\" is not declared in the table \"" + mod.getName() + "\" @line: " + ctx.getStop().getLine();
+							this.errors.add(local_id_not_found);
+							errores++;
+						}
+					switch (con.gettype())
+					{
+					case "Primary Key":
+						if (! mod.getPrimaryKeys().isEmpty())
+						{
+							String multiplePk = "A table cant have more than one Primary Key @line "+ ctx.getStop().getLine();
+							this.errors.add(multiplePk);
+							errores++;
+						}
+						if (errores == 0)
+						{
+							for (String i: con.getIDS_local())
+							{
+								int nullCount = 0;
+								int index_data_attr = mod.getattributesNames().indexOf(i);
+								for (String data_i: mod.dataColumnI(index_data_attr))
+									if (data_i.toLowerCase().equals("null"))
+										nullCount++;
+								if (nullCount > 0)
+								{
+									String pkNotNull = "Primary Key \""+ con.getId() +"\" can't be added because the Attribute \"" + i + "\" has " + nullCount+ " null values @line: " +ctx.getStop().getLine();
+									this.errors.add(pkNotNull);
+								}
+							}
+						}
+						break;
+					case "Foreign Key":
+						//Referenced IDS
+						
 					}
 				}
 			}
 		}
+		return (T)"";
 	}
 }
 	
