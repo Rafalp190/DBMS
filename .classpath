@@ -6,6 +6,7 @@
 	<classpathentry kind="lib" path="antlr-4.4-complete.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
+<<<<<<< HEAD
 =======
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
@@ -15,3 +16,5 @@
 	<classpathentry kind="output" path="bin"/>
 </classpath>
 >>>>>>> origin/GUIMario
+=======
+>>>>>>> 4362b4cc00baa24632e4b181af6a115b008a96d7
