@@ -17,6 +17,7 @@ import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
@@ -52,13 +53,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 	JMenuItem miOpen, miSave, miSaveAs, miUndo, miRedo, miRun, miComment, miCut, miCopy, miPaste;
 	JButton btnOpen, btnSave, btnRun, btnUndo, btnRedo, btnDelete;
 	JTextField status, dataBaseUse;
-
+	JCheckBox verbose;
 	JFileChooser fileChooser;
 	UndoManager undoManager;
 	File file;
 	JTextArea textArea, OutputArea, verboseArea;
 	JTabbedPane tabbedPane;
-	
+	JSplitPane izqder,arribajo;
 	
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
@@ -160,9 +161,6 @@ public class DBMSgui extends JFrame implements ActionListener {
 		miRun.setAccelerator(keyStrokeToRun);
 		miRun.addActionListener(this);
 		menuRun.add(miRun);
-		
-		//arreglar desde aqui
-		this.getContentPane().setLayout(new BorderLayout(0, 0));
 		
 		JToolBar toolBar = new JToolBar();
 		this.getContentPane().add(toolBar, BorderLayout.NORTH);
@@ -293,17 +291,46 @@ public class DBMSgui extends JFrame implements ActionListener {
 			System.out.println("Error in imagenes/erase.png");
 		}
 		toolBar.add(btnDelete);
-			
+		
+		verbose = new JCheckBox("Verbose");
+		verbose.addActionListener(this);
+		toolBar.add(verbose);
+		
+		/*izqder = new JSplitPane();
+		izqder.setResizeWeight(0.5);
+		izqder.setContinuousLayout(true);
+		izqder.setOrientation(JSplitPane.HORIZONTAL_SPLIT);
+		this.getContentPane().add(izqder, BorderLayout.CENTER);
+		*/
+		arribajo = new JSplitPane();
+		arribajo.setResizeWeight(0.5);
+		arribajo.setContinuousLayout(true);
+		arribajo.setOrientation(JSplitPane.VERTICAL_SPLIT);
+		this.getContentPane().add(arribajo, BorderLayout.CENTER);
+		//izqder.setRightComponent(arribajo);
+		
 		textArea = new JTextArea(20,120);
 		textArea.setFont(new Font("Monoespaced",Font.PLAIN,12));
 		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-		this.getContentPane().add(scroll,BorderLayout.CENTER);
 		
 		TextLineNumber tln = new TextLineNumber(textArea);
 		scroll.setRowHeaderView(tln);
+		arribajo.setLeftComponent(scroll);
 		
-		tabbedPane = new JTabbedPane();
+		tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		arribajo.setRightComponent(tabbedPane);
 		
+		JScrollPane scroll1 = new JScrollPane();
+		tabbedPane.addTab("Data Output", null, scroll1, null);
+		OutputArea = new JTextArea();
+		OutputArea.setEditable(false);
+		scroll1.setViewportView(OutputArea);
+		
+		JScrollPane scroll2 = new JScrollPane();
+		tabbedPane.addTab("Verbose", null, scroll2, null);
+		verboseArea = new JTextArea();
+		verboseArea.setEditable(false);
+		scroll2.setViewportView(verboseArea);
 		
 		
 		
