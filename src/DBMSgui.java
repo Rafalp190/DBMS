@@ -1,17 +1,23 @@
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.EventQueue;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.TimeUnit;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
@@ -23,13 +29,16 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
@@ -39,6 +48,8 @@ import javax.swing.KeyStroke;
 import javax.swing.border.Border;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.text.DefaultStyledDocument;
@@ -52,6 +63,7 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import generatedsources.sqlLexer;
 import generatedsources.sqlParser;
+import views.LineNumberTableRowHeader;
 import views.TextLineNumber;
 import views.Tree;
 
@@ -72,7 +84,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	File file;
 	JTextPane textArea;
 	JTextArea OutputArea, verboseArea;
-	JTabbedPane tabbedPane;
+	JTabbedPane tabbedPane, tabbedPaneQuery;
 	JSplitPane izqder,arribajo;
 	
 	String comment = "//", text = "";
@@ -332,14 +344,19 @@ public class DBMSgui extends JFrame implements ActionListener {
 		
 		/*textArea = new JTextArea(20,120);
 		textArea.setFont(new Font("Monoespaced",Font.PLAIN,12));*/
+		
+		
 		textArea = new JTextPane();
 		textArea.getDocument().addUndoableEditListener(undoManager);
 		setCaretListener(textArea);
 		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		
+		tabbedPaneQuery = new JTabbedPane(JTabbedPane.TOP);
+		tabbedPaneQuery.addTab("Query Tool", null, scroll,null);
+		
 		TextLineNumber tln = new TextLineNumber(textArea);
 		scroll.setRowHeaderView(tln);
-		arribajo.setLeftComponent(scroll);
+		arribajo.setLeftComponent(tabbedPaneQuery);
 		
 		tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 		arribajo.setRightComponent(tabbedPane);
@@ -473,29 +490,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 			long startTime = System.nanoTime();
 	    	ANTLRInputStream input = new ANTLRInputStream(text);
 	    	
-	    	/*
-    	    create database antros;
-    	    use database antros;
-			create table baronRojo (nombre int, dpi char(10), edad char(4), constraint pk primary KEY (nombre, dpi));
-			create table baronRojoCayala (nombre int, dpi char(10), CONSTRAINT pk PRIMARY KEY(nombre, dpi), CONSTRAINT fk FOREIGN KEY(nombre) REFERENCES baronRojo (nombre, dpi), CONSTRAINT fk2 FOREIGN KEY(dpi) REFERENCES baronRojo (edad), CONSTRAINT ch CHECK(nombre > dpi) );
-			create table baronRojoXela (id int, constraint fk foreign key(id) references baronRojoCayala (nombre) );
-			alter table baronRojo add column fecha date constraint fk foreign key (nombre) references baronRojoXela (id);
-	    	 */
-    	
-	    	// Create Table
-	    	//ANTLRInputStream input = new ANTLRInputStream("use database prueba; create table baronRojo (nombre int, dpi char(10), edad char(4), constraint pk primary KEY (nombre, dpi));");
-	    	
-	    	// Create Table con Constraints
-	        //ANTLRInputStream input = new ANTLRInputStream("use database prueba; create table baronRojoCayala (nombre int, dpi char(10), CONSTRAINT pk PRIMARY KEY(nombre, dpi), CONSTRAINT fk FOREIGN KEY(nombre) REFERENCES baronRojo (nombre, dpi), CONSTRAINT fk2 FOREIGN KEY(dpi) REFERENCES baronRojo (edad), CONSTRAINT ch CHECK(nombre > dpi) );");  	
-	   	
-	    	// Rename Table
-	    	//ANTLRInputStream input = new ANTLRInputStream("use database prueba; alter table baronRojo rename to baronAzul;");
-    	
 	        sqlLexer lexer = new sqlLexer(input);
 	        
 	        CommonTokenStream tokens = new CommonTokenStream(lexer);
 	
 	        sqlParser parser = new sqlParser(tokens);
+	        
+	        dbmsVisitor semantic_checker = new dbmsVisitor();
 	        
 	        //errores sintacticos
 	        parser.removeErrorListeners();
@@ -511,17 +512,17 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        
 	        
 	        Object obj = (Object)semantic_checker.visit(tree);
-	        semantic_checker.guardarDBs();
+	        semantic_checker.saveSchema();
 	        
-	        if (semantic_checker.getActual().getName().isEmpty()){
+	        if (semantic_checker.getCurrent().getName().isEmpty()){
 	        	dataBaseUse.setText("Database: ");
 	        }else{
-	        	dataBaseUse.setText("Database: "+semantic_checker.getActual().getName());
+	        	dataBaseUse.setText("Database: "+semantic_checker.getCurrent().getName());
 	        }
 
 	        long estimatedTime = System.nanoTime()-startTime;
-	        if (obj instanceof DataBases){
-	        	DataBases dbs = (DataBases) obj;
+	        if (obj instanceof Schema){
+	        	Schema dbs = (Schema) obj;
 	        	addNewTab(dbs);
 	        }else if (obj instanceof Table){
 	        	Table tb = (Table) obj;
@@ -536,15 +537,15 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        }
 	        //System.out.println(this.toStringVerbose());
 	        
-	        if (!semantic_checker.erroresToString().isEmpty())
-	        	OutputArea.setText(semantic_checker.erroresToString()+"\n"+calculateTime(estimatedTime));
+	        if (!semantic_checker.errorsToString().isEmpty())
+	        	OutputArea.setText(semantic_checker.errorsToString()+"\n"+calculateTime(estimatedTime));
 	        else
 	        	OutputArea.setText(semantic_checker.toStringMessages() + "\n" + "Terminado"+"\n"+calculateTime(estimatedTime));
-	        dataReadArea.setText(text);
-	        semantic_checker.resetValues();
+	       
+	        semantic_checker.clearValues();
 	        //splitPane1.setLeftComponent(new SimpleTree());
 		} catch (Exception e){
-			dataReadArea.setText("Unexpected error: " + e.getStackTrace().toString());
+			
 		}
 		
 	}
@@ -671,4 +672,182 @@ public class DBMSgui extends JFrame implements ActionListener {
 			ret += i + "\n";
 		return ret;
 	}
+
+    public void addNewTab(Schema dataBases){
+		String name = "dbs.bin";
+		JTable table = null;
+		JScrollPane scrollPane_1 = new JScrollPane(table, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		//JScrollPane scrollPane_1 = new JScrollPane();
+		
+		
+		table = createNewTable(dataBases);	
+		if (table != null){
+			LineNumberTableRowHeader tableLineNumber = new LineNumberTableRowHeader(scrollPane_1,table);
+			scrollPane_1.setRowHeaderView(tableLineNumber);
+			scrollPane_1.setViewportView(table);
+			//if (tabbedPane.indexOfComponent(scrollPane_1) == -1)
+			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+			tabbedPane.add(scrollPane_1);
+			tabbedPane.setTabComponentAt(tabbedPane.indexOfComponent(scrollPane_1), getTitlePanel(tabbedPane,(Component)scrollPane_1,name));
+			tabbedPane.setSelectedIndex(tabbedPane.getComponentCount()-2);
+		}
+	}
+	
+	public void addNewTab(Table tableObj){
+		String name = tableObj.getName();
+		JTable table = null;
+		JScrollPane scrollPane_1 = new JScrollPane(table, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		//JScrollPane scrollPane_1 = new JScrollPane();
+		
+		
+		table = createNewTable(tableObj);
+		if (table != null){
+			LineNumberTableRowHeader tableLineNumber = new LineNumberTableRowHeader(scrollPane_1,table);
+			//tableLineNumber.setBackground(Color.LIGHT_GRAY);
+			scrollPane_1.setRowHeaderView(tableLineNumber);
+			scrollPane_1.setViewportView(table);
+			//if (tabbedPane.indexOfComponent(scrollPane_1) == -1)
+			table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+			tabbedPane.add(scrollPane_1);
+			tabbedPane.setTabComponentAt(tabbedPane.indexOfComponent(scrollPane_1), getTitlePanel(tabbedPane,(Component)scrollPane_1,name));
+			tabbedPane.setSelectedIndex(tabbedPane.getComponentCount()-2);
+		}
+	}
+	
+	public JTable createNewTable(Table table){
+		ArrayList<String> nombres = new ArrayList();
+		ArrayList<String> tooltip = new ArrayList();
+		ArrayList<Attribute> atributos = table.getattributes();
+		for (Attribute at: atributos){
+			nombres.add(at.getId());
+			tooltip.add(table.IDtoString(at.getId()).replace("and"," and ").replace("or"," or ").replace("not"," not ").replace("<", " &lt ").replace(">", " &gt ").replace("\n", "<br/>"));
+			
+		}
+		
+		Object [] columnNames = nombres.toArray();
+		Object [] columnTooltip = tooltip.toArray();
+		
+		
+		
+		DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+		for (ArrayList<String> tupla: table.getData()){
+			//System.out.println("tupla: "+tupla);
+			Object[] objs = (Object[]) tupla.toArray();
+			//if (objs.length > 0)
+				tableModel.addRow(objs);
+			
+		}
+		//System.out.println("Ya llego a crear la tabla");
+		//if (tableModel.getRowCount()>0){
+			JTable nTable = new JTable(tableModel){
+				protected JTableHeader createDefaultTableHeader(){
+					return new JTableHeader(columnModel){
+						public String getToolTipText(MouseEvent e){
+							java.awt.Point p = e.getPoint();try{
+							int index = columnModel.getColumnIndexAtX(p.x);
+							int realIndex = columnModel.getColumn(index).getModelIndex();
+							//System.out.println((String)columnTooltip[realIndex]);
+							return "<html>"+(String)columnTooltip[realIndex]+"</html>";
+							} catch (Exception ex){
+								return null;
+							}
+						}
+					};
+				}
+			};
+			nTable.setEnabled(false);
+			return nTable;
+		//}
+		//return null;
+	}
+	
+	
+	public JTable createNewTable(Schema dataBases){
+		String [] columnNames = {"Database","Table Number"};
+		DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
+		for (DataBase st: dataBases.getSchema()){
+			Object[] objs = {st.getName(), st.getTables().size()};
+			//if (objs.length > 0)
+				tableModel.addRow(objs);
+		}
+		//if (tableModel.getRowCount()>0){
+			JTable nTable = new JTable(tableModel);
+			nTable.setEnabled(false);
+			return nTable;
+		//}
+		//return null;
+	}
+	
+	public JPanel getTitlePanel(final JTabbedPane tabbedPane, final Component panel, String title){
+		JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+		titlePanel.setOpaque(false);
+		JLabel titleLbl = new JLabel(title);
+		titleLbl.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 5));
+		titlePanel.add(titleLbl);
+		JButton closeButton = new JButton("x");
+	 
+		Border emptyBorder = BorderFactory.createEmptyBorder();
+		closeButton.setBorder(emptyBorder);
+		//closeButton.setOpaque(true);
+
+		closeButton.addMouseListener(new MouseAdapter(){
+			@Override
+			public void mouseClicked(MouseEvent e){
+				tabbedPane.remove(panel);
+			}
+		});
+		titlePanel.add(closeButton);
+
+		return titlePanel;
+	}
+	
+	public void recursiveRoot(ParseTree tree)
+    {
+    	// Listado inicial de elementos
+    	List<ParseTree> childs = new ArrayList<>();    	
+    	for (int i=0; i < tree.getChildCount(); i++)
+    		childs.add(tree.getChild(i));
+    	
+    	// Recorrer listado inicial
+    	for (ParseTree i: childs)
+    	{    	
+	    	if (i.getChildCount() != 0)
+	    	{    		
+	    		String ruleName = i.getClass().getSimpleName().replace("Context", "");
+	            ruleName = Character.toLowerCase(ruleName.charAt(0)) + ruleName.substring(1);
+	            this.verbose.add(ruleName);
+				recursiveRoot(i);
+	    	}
+    	}
+    }
+
+	public String calculateTime(long nanoTime){
+		String str = "Estimated time: ";
+		long hr, min, sec, msec, nsec, time = 0;
+		if ((hr = TimeUnit.NANOSECONDS.toHours(nanoTime))>0){
+			str += ""+hr+"hr ";
+			time = time+hr*60;
+		}
+		if ((min = TimeUnit.NANOSECONDS.toMinutes(nanoTime))>0){
+			min = min-time;
+			str += ""+min+"min ";
+			time = (time + min)*60;
+		}
+		if ((sec = TimeUnit.NANOSECONDS.toSeconds(nanoTime))>0){
+			sec = sec-time;
+			str += ""+sec+"s ";
+			time = (time + sec)*1000;
+		}
+		if ((msec = TimeUnit.NANOSECONDS.toMillis(nanoTime))>0){
+			msec = msec-time;
+			str += ""+msec+"ms ";
+			time = (time + msec)*1000000;
+		}
+		if ((nsec = TimeUnit.NANOSECONDS.toNanos(nanoTime))>0)
+			nsec = nsec-time;
+			str += ""+nsec+"ns ";
+			
+		return str;
+	}
+
 }
