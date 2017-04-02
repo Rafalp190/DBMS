@@ -36,13 +36,9 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import generatedsources.sqlLexer;
 import generatedsources.sqlParser;
+import sun.security.util.Length;
 
 
-/**
- * @author Rafa
- *
- * @param <T>
- */
 /**
  * @author Rafa
  *
@@ -1902,8 +1898,311 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	 **************************/
 	@Override
 	public Object visitInsert_value(sqlParser.Insert_valueContext ctx){
-		return null;
+		String ID = ctx.ID().getText();
+		
+		//Checks current db in use
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+			if (this.current.existTable(ID))
+			{
+				table = this.getCurrent().getTable(ID);
+				ArrayList<String> row = new ArrayList();
+				int values;
+				int columns;
+				if (ctx.getChildCount()==7)
+				{
+					values = ctx.getChild(5).getChildCount();
+					columns = ctx.getChild(3).getChildCount();
+				}
+				else
+				{
+					values = ctx.getChild(4).getChildCount();
+					columns = table.getattributes().size()-1;
+				}
+				//Checks for the amount of errors BEFORE doing the INSERT statement
+				int errCont = this.errors.size();
+				
+				//Fills row with null
+				int colNum = table.getattributes().size();
+				for (int i=0; i<colNum;i++)
+				{
+					row.add("NULL");
+				}
+				if (table != null)
+				{
+					if(columns <= values || (columns+2 <= values && ctx.getChild(3).getText().contains("("))|| (columns <= values+2 && ctx.getChild(5).getText().contains("(")))
+					{
+						ArrayList<Attribute> cols;
+						ArrayList<Value> vals;
+						
+						if(ctx.getChildCount()==7)
+						{
+							cols = (ArrayList<Attribute>) this.visit(ctx.getChild(3));
+							vals = (ArrayList<Value>) this.visit(ctx.getChild(5));
+						}
+						else
+						{
+							cols = table.getattributes();
+							vals = (ArrayList<Value>)this.visit(ctx.getChild(4));
+						}
+						{
+							for (int cont=0; cont<cols.size() && cont<vals.size();cont++)
+							{
+								Attribute attr = cols.get(cont);
+								Value val = vals.get(cont);
+								if (attr.gettype().equals(val.getType())|| val.getValue().toUpperCase().equals("NULL"))
+								{
+									if (attr.gettype().equals("char"))
+									{
+										if (attr.getSize()>= val.getSize()-2)
+										{
+											int index = this.table.getattributes().indexOf(attr);
+											row.set(index, val.getValue());
+										}
+										else
+										{
+											String rule_s = "Size of value: \"" + val.getValue() + "\" is bigger than the size declared for attribute: \"" + attr.getId() + "\" @line: "+ ctx.getStop().getLine();
+											this.errors.add(rule_s);
+										}
+									}
+									else
+									{
+										int index = this.table.getattributes().indexOf(attr);
+										row.set(index, val.getValue());
+									}
+								}
+								else
+								{
+									//Checks if values can be casted into int or float
+									if (attr.gettype().equals("int")&& val.getType().equals("float"))
+									{
+										String num = val.getValue();
+										int index = num.indexOf('.');
+										num = num.substring(0, index);
+										val.setValue(num);
+										val.setType("int");
+										
+										int index2 = this.table.getattributes().indexOf(attr);
+										row.set(index2,  val.getValue());
+									}
+									else
+									{
+										if (val.getType().equals("int") && attr.gettype().equals("float"))
+										{
+											String num = val.getValue();
+											num += ".0";
+											val.setValue(num);
+											val.setType("float");
+											
+											int index = this.table.getattributes().indexOf(attr);
+											row.set(index, val.getValue());
+										}
+										else
+											if(attr.gettype().equals("char") && val.getType().equals("date"))
+											{
+												if(attr.getSize() >= val.getValue().length()-2)
+												{
+													int index = this.table.getattributes().indexOf(attr);
+													row.set(index, val.getValue());
+												}
+												else
+												{
+													String rule_s = "Size of value: \"" + val.getValue() + "\" is bigger than the size declared for attribute: \"" + attr.getId() + "\" @line: "+ ctx.getStop().getLine();
+													this.errors.add(rule_s);
+												}
+											}
+											else
+											{
+												if (attr.gettype().equals("date") && val.getType().equals("char"))
+												{
+													if(checkDate(val.getValue()))
+													{
+														int index = this.table.getattributes().indexOf(attr);
+														row.set(index,val.getValue());
+													}
+													else
+													{
+														String rule_c = "The value \""+ val.getValue() + "\", can't be casted to \"" + attr.gettype() +"\" @line: " + ctx.getStop().getLine();
+														this.errors.add(rule_c);
+													}	
+												}
+												else
+												{
+													String rule_c = "The type of value \""+ val.getValue() + "\", can't be casted to \"" + attr.gettype() +"\" @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_c);
+												}
+												
+											}
+									}
+								}	
+							}			
+							//Checks for nulls in PK		
+							{
+								if (this.table.getPrimaryKeys().size() > 0)
+								{
+									Constraint key = this.table.getPrimaryKeys().get(0);
+									for (String idk : key.getIDS_local())
+									{
+										Attribute atrk = this.table.getID(idk);
+										int indexk = this.table.getattributes().indexOf(atrk);
+										if (row.get(indexk).toUpperCase().equals("NULL"))
+										{
+											String rule_5 = "Nulls can't be inserted in Primary Key @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);	
+											break;
+										}
+									}
+								}
+							}
+							if (errCont == this.errors.size())
+							{
+								if (PrimaryKey(row, -1))
+								{
+									
+									
+									//revisar check
+									ArrayList<Constraint> check = table.getChecks();//obtenemos checks
+									Table temp = table;//guardo la tabla temporal
+									table = new Table();
+									table.setattributes(temp.getattributes());//seteamos atributos
+									table.addData(row);//agregamos fila para evaluar check
+									boolean set = true;
+									for (Constraint ct: check){
+										ANTLRInputStream input = new ANTLRInputStream(ct.getCondition());
+										sqlLexer lexer = new sqlLexer(input);
+										CommonTokenStream tokens = new CommonTokenStream(lexer);
+										sqlParser parser = new sqlParser(tokens);
+										ParseTree tree = parser.condition();
+										System.out.println(tree.getText());
+										Object obj = (Object)visit(tree);
+										
+										if (obj == null){
+											String rule_5 = "Unexpected error evaluating Check "+ct.getId()+" @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											set = false;
+										}else{
+											LinkedHashSet<Integer> lhk = (LinkedHashSet<Integer>) obj;
+											if (lhk.size() == 0){
+												String rule_5 = "Inserted values don't meet check evalation "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												set = false;
+											}
+										}
+										
+									}
+									if (set){
+										if (ForeignKey(row,-1)){
+											table = temp;
+
+											this.table.addData(row);
+											this.inserted_rows++;
+										}else{
+											String rule_5 = "Value does not exist in referenced table @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+										}
+										
+									}
+								}
+								else
+								{
+									String rule_5 = "Can't have duplicated Primary Keys @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+								}
+							}
+						}
+					}
+					else
+					{	
+						String rule_5 = "Cant INSERT more columns than values @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+					}
+				}
+			}
+			else
+			{
+				String rule_5 = "The table " + ID + " does not exist in database " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
+				this.errors.add(rule_5);
+			}
+		}		
+		
+		
+		
+		// TODO Auto-generated method stub
+		return new String();
 	}
+	/**************************
+	 * LIST
+	 **************************/
+	@Override
+	public Object visitList(sqlParser.ListContext ctx) {
+		
+		ArrayList<Value> values = new ArrayList();
+		
+		int cont = 0;
+		for (int i = 0; i < ctx.getChildCount(); i++)
+			if (!ctx.getChild(i).getText().equals("(") && !ctx.getChild(i).getText().equals(")") && !ctx.getChild(i).getText().equals(","))
+			{
+				Value valor = new Value();
+				String text = ctx.literal(cont).getText();
+				String tipo = (String)this.visit(ctx.getChild(i));
+				cont++;
+				if (tipo.equals("char"))
+				{
+					valor = new Value(text,tipo, text.length()-2);
+				}
+				else
+				{
+					if (tipo.equals("Error"))
+					{
+						String rule_5 = "Date " + text + " isn't valid @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+						valor = new Value(text,"date");
+					}
+					else
+					{
+						valor = new Value(text,tipo);
+					}
+				}
+				values.add(valor);
+			}
+		
+		// TODO Auto-generated method stub
+		return values;
+	}
+	/*****************************
+	 * COLUMNS
+	 *****************************/
+	@Override
+	public Object visitColumns(sqlParser.ColumnsContext ctx) {
+		
+		ArrayList<Attribute> columnas = new ArrayList();
+		
+		for (int i = 0; i < ctx.getChildCount(); i++)
+			if (!ctx.getChild(i).getText().equals("(") && !ctx.getChild(i).getText().equals(")") && !ctx.getChild(i).getText().equals(","))
+			{
+				
+				String columna = ctx.getChild(i).getText(); 
+				if (this.table.hasAttribute(columna))
+				{
+					Attribute id = this.table.getID(columna);
+					columnas.add(id);
+				}
+				else
+				{
+					String rule_5 = "The table " + this.table.getName() + " does not contain the column: " + columna + " @line: " + ctx.getStop().getLine();
+					this.errors.add(rule_5);
+				}
+			}
+		
+		// TODO Auto-generated method stub
+		return columnas;
+	}
+	
 }
 	
 	
