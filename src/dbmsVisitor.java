@@ -1806,41 +1806,41 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		
 		if (Integer.parseInt(valor1[0])<Integer.parseInt(valor2[0]))
 		{
-			return "menor";
+			return "lower than";
 		}
 		else
 		{
 			if (Integer.parseInt(valor1[0])>Integer.parseInt(valor2[0]))
 			{
-				return "mayor";
+				return "bigger than";
 			}
 			else
 			{
 				if (Integer.parseInt(valor1[1])<Integer.parseInt(valor2[1]))
 				{
-					return "menor";
+					return "lower than";
 				}
 				else
 				{
 					if (Integer.parseInt(valor1[1])>Integer.parseInt(valor2[1]))
 					{
-						return "mayor";
+						return "bigger than";
 					}
 					else
 					{
 						if (Integer.parseInt(valor1[2])<Integer.parseInt(valor2[2]))
 						{
-							return "menor";
+							return "lower than";
 						}
 						else
 						{
 							if (Integer.parseInt(valor1[2])>Integer.parseInt(valor2[2]))
 							{
-								return "mayor";
+								return "bigger than";
 							}
 							else
 							{
-								return "igual";
+								return "equal";
 							}
 						}
 					}
@@ -2202,6 +2202,2491 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		// TODO Auto-generated method stub
 		return columnas;
 	}
+	/*************************
+	 * UPDATE
+	 *************************/
+	@Override
+	public Object visitUpdate_value(sqlParser.Update_valueContext ctx) {
+		
+		String id = ctx.getChild(1).getText();
+		int contErrores = this.errors.size();
+		
+		// Verificar que haya un DB en uso
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{
+		
+			if (this.current.existTable(id))
+			{
+				this.table = this.current.getTable(id);
+				int size = this.table.getData().size();
+				
+				if (ctx.getChildCount() == 5)
+				{
+					ArrayList<String> newfila = (ArrayList<String>)this.visit(ctx.getChild(3));
+					
+					for (int i = 0; i<size && contErrores==this.errors.size();i++)
+					{
+						this.table.getData().set(i, newfila);
+					}
+				}
+				else
+				{
+					Object obj = (Object) visit(ctx.getChild(5));
+					if (obj == null){
+						String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+						return null;
+					}
+					
+					if (!(obj instanceof LinkedHashSet)){
+						String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+						return null;
+					}
+					
+					LinkedHashSet<Integer> indices = (LinkedHashSet<Integer>)obj;
+					ArrayList<Integer> index= new ArrayList(indices);
+					ArrayList<String> newfila = (ArrayList<String>)this.visit(ctx.getChild(3));
+					ArrayList<String> fila = new ArrayList<String>();
+					ArrayList<String> fin = new ArrayList<String>();
+					
+					for (int j=0;j<newfila.size();j++)
+						fin.add("");
+					
+					boolean flag = true;
+					if (contErrores == this.errors.size())
+					{
+						for (int i: index){
+							fila = table.getData().get(i);
+							for (String col : newfila)
+							{
+								int index2 = newfila.indexOf(col);
+								if (col.equals("UPDATE"))
+								{
+									fin.set(i, fila.get(index2));
+								}
+								else
+									fin.set(i, newfila.get(index2));
+							}
+							
+							//Revisamos que no venga un NULL en una PrimaryKey
+							{
+								if (this.table.getPrimaryKeys().size() > 0)
+								{
+									Constraint key = this.table.getPrimaryKeys().get(0);
+									for (String idk : key.getIDS_local())
+									{
+										Attribute atrk = this.table.getID(idk);
+										int indexk = this.table.getattributes().indexOf(atrk);
+										if (fila.get(indexk).toUpperCase().equals("NULL"))
+										{
+											flag = false;
+											String rule_5 = "NULL can't be inserted in a Primary Key @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);	
+											break;
+										}
+									}
+								}
+							}
+							
+							if (PrimaryKey(fin,i))
+							{
+								//En update solo lo podemos cambiar si el foreign key no existe
+								if (!ForeignKey(fin,i))
+								{
+									//revisar check
+									ArrayList<Constraint> check = table.getChecks();//obtenemos checks
+									Table temp = table;//guardo la tabla temporal
+									table = new Table();
+									table.setattributes(temp.getattributes());//seteamos atributos
+									table.addData(fin);//agregamos fila para evaluar check
+									
+									for (Constraint ct: check){
+										ANTLRInputStream input = new ANTLRInputStream(ct.getCondition());
+										sqlLexer lexer = new sqlLexer(input);
+										CommonTokenStream tokens = new CommonTokenStream(lexer);
+										sqlParser parser = new sqlParser(tokens);
+										ParseTree tree = parser.condition();
+										
+										Object obj1 = (Object)visit(tree);
+										if (obj1 == null){
+											String rule_5 = "Unexpected error evaluating a check "+ct.getId()+" @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											flag = false;
+										}else{
+											LinkedHashSet<Integer> lhk = (LinkedHashSet<Integer>) obj1;
+											if (lhk.size() == 0){
+												String rule_5 = "Inserted values don't meet check requirements "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												flag = false;
+											}
+										}
+										
+									}
+									
+								}
+								else
+								{
+									flag=false;
+									String rule_5 = "The Value trying to be updated references another Table  @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									break;
+								}
+							}
+							else
+							{
+								flag=false;
+								String rule_5 = "Duplicated Primary Key  @line: " + ctx.getStop().getLine();
+								this.errors.add(rule_5);
+								break;
+							}
+						}
+						
+						//Si todos cumplieron con las validaciones los actualizamos
+						if (flag)
+						{
+							for (int i: index){
+								this.table.getData().set(i, fin);
+								this.updated_rows++;
+							}
+						}
+					}
+				}
+			}
+			else
+			{
+				String rule_5 = "La tabla " + id + " no existe en la base de datos " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
+				this.errors.add(rule_5);
+			}
+		}
+		
+		// TODO Auto-generated method stub
+		return super.visitUpdate_value(ctx);
+	}
+	
+	/**************************
+	 * Asignacion
+	 **************************/
+	@Override
+	public Object visitAsignacion(sqlParser.AsignacionContext ctx) {
+		
+		ArrayList<String> newfila = new ArrayList<String>();
+		
+		int numCols = this.table.getattributes().size();
+		for (int i=0;i<numCols;i++)
+			newfila.add("UPDATE");
+		
+		int index = 0;
+		Attribute atr = new Attribute();
+		for (int j=0;j<ctx.getChildCount();j++)
+		{
+			String text = ctx.getChild(j).getText();
+			if (!text.equals("=") && !text.equals(","))
+			{
+				if (j==0 || j%4==0)
+				{
+					if (this.table.hasAttribute(text))
+					{
+						atr = this.table.getID(text);
+						index = this.table.getattributes().indexOf(atr);
+					}
+					else
+					{
+						String rule_5 = "La tabla " + this.table.getName() + " no contiene la columna " + text + " @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+					}
+				}
+				else
+				{
+					String tipo = (String)this.visit(ctx.getChild(j));
+					//buscamos si el tipo puede ser casteado
+					if (atr.gettype().equals(tipo) || text.toUpperCase().equals("NULL"))
+					{
+						if (tipo.equals("char"))
+						{
+							if (text.length()-2 <= atr.getSize())
+							{
+								newfila.set(index, text);
+							}
+							else
+							{
+								String rule_5 = "The size of '" + text + "' es bigger than the size reserved for character: '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
+								this.errors.add(rule_5);
+							}
+						}
+						else
+							newfila.set(index, text);
+					}
+					else
+					{
+						if (atr.gettype().equals("int") && tipo.equals("float"))
+						{
+							int k = text.indexOf('.');
+							newfila.set(index, text.substring(0, k));
+						}
+						else
+						{
+							if (atr.gettype().equals("float") && tipo.equals("int"))
+							{
+								newfila.set(index, text+".0");
+							}
+							else
+							{
+								if (atr.gettype().equals("char") && tipo.equals("date"))
+								{
+									if (text.length()-2 == atr.getSize())
+									{
+										newfila.set(index, text);
+									}
+									else
+									{
+										String rule_5 = "The size of '" + text + "' is bigger than the size reserved for '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+									}
+								}
+								else
+								{
+									if (atr.gettype().equals("date") && tipo.equals("char"))
+									{
+										if (this.visit(ctx.getChild(j)).equals("date"))
+										{
+											newfila.set(index, text);
+										}
+										else
+										{
+											String rule_5 = "Value: '" + text + "', can't be casted to '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+										}
+									}
+									else
+									{
+										String rule_5 = "The type: '" + tipo + "', can't be casted to '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		// TODO Auto-generated method stub
+		return newfila;
+	}
+	
+	
+	/**************************
+	 * DELETE 
+	 * debo revisar que si exista la tabla en la database actual
+	 * si no existe condicion borro toda la tabla
+	 * si existe reviso que filas cumplen con la condicion
+	 */
+	@Override
+	public Object visitDelete_value(sqlParser.Delete_valueContext ctx) {
+		String id = ctx.ID().getText();
+		// Verificar que haya un DB en uso
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String noDB = "No database in use @line: " + ctx.getStop().getLine();
+			this.errors.add(noDB);
+		}
+		else
+		{		
+			this.table = this.getCurrent().getTable(id);
+			
+			if (table == null){
+				String rule_5 = "The table " + id + " does not exist in DataBase: " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
+				this.errors.add(rule_5);
+				return null;
+			}
+			
+			int errores = 0;
+			
+			// Sin WHERE condition -> borra toda la data
+			if (ctx.getChildCount() <= 4)
+			{
+				// Revisar FKS
+				// Verificar que alguna fk haga referencia a esta tabla
+				if (this.current.existRef(id))
+				{
+					for (Table i: this.current.getTables())
+						for (Constraint f: i.getForeignKey())
+							if (f.getId_ref().equals(id))
+							{							
+								ArrayList<Integer> index_table_with_fk = new ArrayList<Integer>();
+								ArrayList<Integer> index_table = new ArrayList<Integer>();
+								for (String s: f.getIDS_local())
+									index_table_with_fk.add(i.getattributesNames().indexOf(s));
+								for (String s: f.getIDS_refs())
+									index_table.add(this.table.getattributesNames().indexOf(s));							
+								// Verificar que sean del mismo tamaño sino no se puede hacer la comapracion
+								if (index_table_with_fk.size() == index_table.size())
+								{
+									int cont = 0;
+									int index_fk = 0;
+									for (Integer index_i: index_table)
+									{
+										index_fk = index_table_with_fk.get(cont);
+										for (String use_data_i: this.table.dataColumnI(index_i))
+											for (String ref_data_i: i.dataColumnI(index_fk))
+											{
+												if (use_data_i.equals(ref_data_i))
+												{
+													String data_to_delete_in_ref = "Can't delete the value \"" + use_data_i + "\" because it belongs to table:  \"" + i.getName() + "\", esta vinculacion la hace la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+													this.errors.add(data_to_delete_in_ref);
+													errores++;
+												}
+											}
+										cont++;
+									}
+								}
+								else
+								{
+									String compare_failed = "Conflict detected with Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+									this.errors.add(compare_failed);
+									errores++;
+								}
+							}
+				}
+				// Borrar toda la data si no hay errores
+				if (errores == 0)
+				{
+					this.messages.add("Deleted " + this.table.getData().size() + " rows from the table \"" + this.table.getName() + "\"");
+					table.setData(new ArrayList<ArrayList<String>>());
+				}
+				return table;				
+			}
+			
+			
+			Object obj = (Object) visit(ctx.getChild(4));
+			if (obj == null){
+				String rule_5 = "Error in the defined conditions @line: " + ctx.getStop().getLine();
+				this.errors.add(rule_5);
+				return null;
+			}
+			
+			if (!(obj instanceof LinkedHashSet)){
+				String rule_5 = "Error in the defined conditions @line: " + ctx.getStop().getLine();
+				this.errors.add(rule_5);
+				return null;
+			}
+			
+			LinkedHashSet<Integer> indices = (LinkedHashSet<Integer>)obj;
+			ArrayList<Integer> index = new ArrayList(indices);
+			ArrayList<Integer> indexesToDelete = new ArrayList<Integer>();
+			Collections.reverse(index);
+			
+			// Revisar FKS
+			// Verificar que alguna fk haga referencia a esta tabla
+			if (this.current.existRef(id))
+			{
+				for (Table i: this.current.getTables())
+					for (Constraint f: i.getForeignKey())
+						if (f.getId_ref().equals(id))
+						{							
+							ArrayList<Integer> index_table_with_fk = new ArrayList<Integer>();
+							ArrayList<Integer> index_table = new ArrayList<Integer>();
+							for (String s: f.getIDS_local())
+								index_table_with_fk.add(i.getattributesNames().indexOf(s));
+							for (String s: f.getIDS_refs())
+								index_table.add(this.table.getattributesNames().indexOf(s));							
+							// Verificar que sean del mismo tamaño sino no se puede hacer la comapracion
+							if (index_table_with_fk.size() == index_table.size())
+							{
+								int cont = 0;
+								int index_fk = 0;
+								for (Integer index_i: index_table)
+								{
+									index_fk = index_table_with_fk.get(cont);
+									int cont_2 = 0;
+									int pos = 0;
+									for (String use_data_i: this.table.dataColumnIWithIndexs(index_i, index))
+									{
+										int match = 0;
+										pos = index.get(cont_2);										
+										for (String ref_data_i: i.dataColumnI(index_fk))
+										{
+											if (use_data_i.equals(ref_data_i))
+											{
+												String data_to_delete_in_ref = "Value \"" + use_data_i + "\" can't be deleted, included in table: \"" + i.getName() + "\", via Foreign Key: \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+												this.errors.add(data_to_delete_in_ref);
+												errores++;
+												match++;
+											}											
+										}
+										cont_2++;
+										if (match == 0)
+											indexesToDelete.add(pos);
+									}
+									cont++;
+								}
+							}
+							else
+							{
+								String compare_failed = "Can't DELETE, conflict with Foreign Key: \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+								this.errors.add(compare_failed);
+								errores++;
+							}							
+						}
+			}
+			// Indices que cumplen con el WHERE CONDITION y no tengan restriccion de CONSTRAINT
+			for (int i: indexesToDelete){
+				table.getData().remove(i);
+			}
+			if (! indexesToDelete.isEmpty())
+				this.messages.add("Deleted " + indexesToDelete.size() + " rows from the table: \"" + this.table.getName() + "\"");
+		}
+		return (T) table;
+	}
+	/**************************
+	 * Condition
+	 */
+	@Override 
+	public T visitConditionNot(sqlParser.ConditionNotContext ctx) 
+	{ 
+		Object obj = visit(ctx.getChild(1));
+		if (obj == null){
+			return null;
+		}
+		
+		if (!(obj instanceof LinkedHashSet)){
+			return null;
+		}
+		
+		LinkedHashSet<Integer> indices = (LinkedHashSet<Integer>) obj;
+		
+		int size = table.getData().size();
+		
+		LinkedHashSet<Integer> nIndices = new LinkedHashSet();
+		
+		for (int i = 0; i < size; i++){
+			if (!indices.contains(i))
+				nIndices.add(i);
+		}
+		
+		return (T)nIndices;
+	}
+
+	public T visitConditionComp (sqlParser.ConditionCompContext ctx){
+		if (ctx.getChildCount() <= 1) return (T)visitChildren(ctx);
+		
+		Object objComp = visit(ctx.getChild(0));
+		if (objComp == null) return null;
+		
+		if (!(objComp instanceof LinkedHashSet)) return null;
+		
+		LinkedHashSet<Integer> compIndex = (LinkedHashSet<Integer>) objComp;
+		
+		String logic = (String) visit(ctx.getChild(1));
+		
+		Object objCond = visit(ctx.getChild(2));
+		if (objCond == null) return null;
+		
+		if (!(objCond instanceof LinkedHashSet)) return null;
+		
+		LinkedHashSet<Integer> condIndex = (LinkedHashSet<Integer>) objCond;
+		LinkedHashSet<Integer> result = null;
+		
+		switch (logic){
+			case "OR":
+				
+				compIndex.addAll(condIndex);
+				result = new LinkedHashSet<Integer>();
+				result.addAll(compIndex);
+				
+				break;
+			case "AND":
+				result = new LinkedHashSet<Integer>();
+				for (int i: compIndex){
+					if (condIndex.contains(i))
+						result.add(i);
+				}
+				break;
+		}
+		
+		
+		return (T)result;
+	}
+
+	public T visitConditionCond (sqlParser.ConditionCondContext ctx){
+		if (ctx.getChildCount() <= 3) return (T) visit(ctx.getChild(1));
+		
+		Object obj1 = visit(ctx.getChild(1));
+		if (obj1 == null) return null;
+		
+		if (!(obj1 instanceof LinkedHashSet)) return null;
+		
+		LinkedHashSet<Integer> cond1Index = (LinkedHashSet<Integer>) obj1;
+		
+		Object obj2 = visit(ctx.getChild(4));
+		if (obj2 == null) return null;
+		
+		if (!(obj2 instanceof LinkedHashSet)) return null;
+		
+		LinkedHashSet<Integer> cond2Index = (LinkedHashSet<Integer>) obj2;
+		
+		String logic = (String)visit(ctx.getChild(3));
+		
+		LinkedHashSet<Integer> result = null;
+		
+		switch (logic){
+			case "OR":
+				cond1Index.addAll(cond2Index);
+				result = new LinkedHashSet<Integer>();
+				result.addAll(cond1Index);
+				break;
+			case "AND":
+				result = new LinkedHashSet<Integer>();
+				for (int i: cond1Index){
+					if (cond2Index.contains(i))
+						result.add(i);
+				}
+				break;
+		}
+		
+		
+		return (T)result;
+	}
+	/***************************
+	 * CompId
+	 * Revisamos comp que puede tener
+	 * ID relational ID | literal
+	 */
+	@Override 
+	public T visitCompId(@NotNull sqlParser.CompIdContext ctx) 
+	{
+		
+		LinkedHashSet<Integer> list = new LinkedHashSet();
+		String op = ctx.getChild(1).getText(); //agarro el relational
+		
+		
+		String id = (String) visit(ctx.getChild(0)); //agarro el primer id
+		
+		if (this.table.hasAttribute(id)) //reviso si existe en la tabla
+		{
+			
+			if (table.isAmbiguous(id)){
+				String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
+				errors.add(error_);
+				return null;
+			}
+			//tomo el atributo de la tabla y el indice de este
+			
+			Attribute atr = this.table.getID(id);
+			
+			Attribute id2 = new Attribute();
+			int index = this.table.getattributes().indexOf(atr);
+			
+			
+			//visito el ultimo hijo 
+			String tipo = (String)this.visit(ctx.getChild(2)); //si es literal, voy a recibir el tipo
+			String value = ctx.getChild(2).getText();
+			
+			//creo una bandera para ver si voy a poder castear los tipos
+			boolean flag = false;
+			
+			//Si es un literal
+			if (tipo.equals("int") || tipo.equals("float") || tipo.equals("date") || tipo.equals("char") || tipo.equals("NULL"))
+			{
+				if (value.toUpperCase().equals("NULL"))
+					flag=true;
+				else
+				{	
+					if (atr.gettype().equals("int") && (tipo.equals("int") || tipo.equals("float")))
+					{
+						flag = true;
+					}
+					else
+					{
+						if (atr.gettype().equals("float") && (tipo.equals("int") || tipo.equals("float")))
+						{
+							flag = true;
+						}
+						else
+						{
+							if (atr.gettype().equals("char") && (tipo.equals("char") || tipo.equals("date")))
+							{
+								flag = true;
+							}
+							else
+							{
+								if (atr.gettype().equals("date") && (tipo.equals("char") || tipo.equals("date")))
+								{
+									flag = true;
+								}
+								else
+								{
+									String rule_5 = "Can't compare type:  " + atr.getId() + " with type:  " + tipo + " @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+							}
+								
+						}
+					}
+				}
+			}
+			else
+				if (tipo.equals("Error"))
+				{
+					// no acepto la fecha
+					String rule_5 = "The date " + value + " isn't valid @line: " + ctx.getStop().getLine();
+					this.errors.add(rule_5);
+					return null;
+				}
+				else
+				{
+					//Si es una columna de la tabla
+					String columna = (String)visit(ctx.getChild(2)); 
+					if (this.table.hasAttribute(columna))
+					{
+						if (table.isAmbiguous(columna)){
+							String error_ = "La llamada <<"+columna+">> es ambigua @line: " + ctx.getStop().getLine();
+							errors.add(error_);
+							return null;
+						}
+						id2 = this.table.getID(columna);
+						
+						value = "'";
+						
+						if (atr.gettype().equals("int") && (id2.gettype().equals("int") || id2.gettype().equals("float")))
+						{
+							flag = true;
+						}
+						else
+						{
+							if (atr.gettype().equals("float") && (id2.gettype().equals("int") || id2.gettype().equals("float")))
+							{
+								flag = true;
+							}
+							else
+							{
+								if (atr.gettype().equals("char") && (id2.gettype().equals("char") || id2.gettype().equals("date")))
+								{
+									flag = true;
+								}
+								else
+								{
+									if (atr.gettype().equals("date") && (id2.gettype().equals("char") || id2.gettype().equals("date")))
+									{
+										flag = true;
+									}
+									else
+									{
+										String rule_5 = "The type " + atr.getId() + " can't be compared with  a " + id2.gettype() + " @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+								}
+									
+							}
+						}
+					}
+					else
+					{
+						String rule_5 = "The table " + this.table.getName() + " doesn't have the column:  " + columna + " @line: " + ctx.getStop().getLine();
+						this.errors.add(rule_5);
+						return null;
+					}
+				}
+			
+			if (flag)
+			{
+				/*
+				 * CompareTo devuelve 0 si son iguales
+				 * mas de 0 si el primero es mayor al segundo
+				 * y menos de 0 si el primero es menor al tercero
+				 */
+				if (value.toUpperCase().equals("NULL"))
+				{
+					if (op.equals("=") || op.equals(">=") || op.equals("<="))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (value.toUpperCase().equals(fila.get(index).toUpperCase()))
+								list.add(cont);
+							cont++;
+						}
+					}
+					if (op.equals("<>"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (!value.toUpperCase().equals(fila.get(index).toUpperCase()))
+								list.add(cont);
+							cont++;
+						}
+					}
+							
+				}
+				else
+				switch (op)
+				{
+					//Igual
+					case "=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare a NULL with a value. @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(s);
+									if (valor.compareTo(comp)==0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(s);
+										Double comp = Double.parseDouble(s1);
+										if (valor.compareTo(comp)==0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (compareDate(comp, value).equals("equal"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare value with NULL @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (compareDate(comp, valor).equals("equal"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare with a NULL @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (value.compareTo(comp)==0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare NULL with a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (valor.compareTo(comp)==0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+									}
+								}
+							}	
+						}
+						
+						break;
+					//Distinto
+					case "<>":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare Null with a Value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(s);
+									if (valor.compareTo(comp)!=0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare Null with a Value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(s);
+										Double comp = Double.parseDouble(s1);
+										if (valor.compareTo(comp)!=0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{	
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare Null to value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (!compareDate(comp, value).equals("equal"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (!compareDate(comp, valor).equals("equal"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (value.compareTo(comp)!=0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (valor.compareTo(comp)!=0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Menor
+					case "<":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (comp.compareTo(valor)<0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(s);
+										Double comp = Double.parseDouble(s1);
+										if (comp.compareTo(valor)<0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (compareDate(comp, value).equals("lower than"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (compareDate(comp, valor).equals("lower than"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(value)<0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(valor)<0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Mayor
+					case ">":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(s);
+									if (comp.compareTo(valor)>0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(fila.get(index2));
+										Double comp = Double.parseDouble(fila.get(index));
+										if (comp.compareTo(valor)>0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (compareDate(comp, value).equals("bigger than"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (compareDate(comp, valor).equals("bigger than"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(value)>0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(valor)>0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Menor Igual
+					case "<=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (comp.compareTo(valor)<0 || valor.compareTo(comp)==0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(fila.get(index2));
+										Double comp = Double.parseDouble(fila.get(index));
+										if (comp.compareTo(valor)<0 || valor.compareTo(comp)==0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("lower than"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (compareDate(comp, valor).equals("equal") || compareDate(comp, valor).equals("lower than"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(value)<0 || comp.compareTo(value)==0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(valor)<0 || comp.compareTo(valor)==0)
+														list.add(cont);
+													cont++;	
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Mayor Igual	
+					case ">=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (comp.compareTo(valor)>0 || valor.compareTo(comp)==0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else //si es una columna de tipo int o float
+						{
+							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+							{
+								int index2 = this.table.getattributes().indexOf(id2);
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									String s = fila.get(index2);
+									String s1 = fila.get(index);
+									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										Double valor = Double.parseDouble(fila.get(index2));
+										Double comp = Double.parseDouble(fila.get(index));
+										if (comp.compareTo(valor)>0 || valor.compareTo(comp)==0)
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son date y es con literal
+								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("bigger than"))
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+								else
+								{
+									//Si ambos son date  y es con columna
+									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
+									{
+										int index2 = this.table.getattributes().indexOf(id2);
+										int cont = 0;
+										for (ArrayList<String> fila : this.table.getData())
+										{
+											
+											String comp = fila.get(index);
+											String valor = fila.get(index2);
+											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
+											{
+												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+												this.errors.add(rule_5);
+												return null;
+											}
+											else
+											{
+												if (compareDate(comp, valor).equals("equal") || compareDate(comp, valor).equals("bigger than"))
+													list.add(cont);
+												cont++;
+											}
+										}
+									}
+									else
+									{
+										//Si ambos son char o mezcla
+										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+										{
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String comp = fila.get(index);
+												if (comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(value)>0 || comp.compareTo(value)==0)
+														list.add(cont);
+													cont++;
+												}
+											}
+										}
+										else
+										{
+											int index2 = this.table.getattributes().indexOf(id2);
+											int cont = 0;
+											for (ArrayList<String> fila : this.table.getData())
+											{
+												String valor = fila.get(index2);
+												String comp = fila.get(index);
+												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
+												{
+													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
+													this.errors.add(rule_5);
+													return null;
+												}
+												else
+												{
+													if (comp.compareTo(valor)<0 || comp.compareTo(valor)==0)
+														list.add(cont);
+													cont++;	
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						break;
+				}
+			}
+			//System.out.println("llego a list: "+list);
+			return (T)list;
+		}
+		else
+		{
+			String rule_5 = "The tab " + this.table.getName() + " doesn't have the column " + id + " @line: " + ctx.getStop().getLine();
+			this.errors.add(rule_5);
+			return null;
+		}
+	}
+	/*********************************
+	 * CompLit
+	 */
+	@Override
+	public Object visitCompLit(sqlParser.CompLitContext ctx) {
+		LinkedHashSet<Integer> list = new LinkedHashSet();
+		String op = ctx.getChild(1).getText(); //agarro el relational
+		
+		//visito el primer hijo 
+		String tipo = (String)this.visit(ctx.getChild(0)); //voy a recibir el tipo
+		String value = ctx.getChild(0).getText();
+		
+		//visito el ultimo hijo 
+		String tipo2 = (String)this.visit(ctx.getChild(2)); //voy a recibir el tipo
+		String value2 = (String)visit(ctx.getChild(2));
+		
+		boolean flag = false;
+		
+		if (!tipo.equals("Error") && !tipo2.equals("Error"))
+			flag = true;
+		
+		if (flag)
+		{
+			switch(op)
+			{
+				case "=":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (compareDate(value,value2).equals("equal"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+				case "<>":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (!compareDate(value,value2).equals("equal"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)!=0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)!=0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+				case "<":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (compareDate(value,value2).equals("lower than"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)<0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)<0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+				case ">":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (compareDate(value,value2).equals("bigger than"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)>0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)>0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+				case "<=":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (compareDate(value,value2).equals("lower than") || compareDate(value,value2).equals("equal"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)<0 || num.compareTo(num2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)<0 || value.compareTo(value2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+				case ">=":
+					if (tipo.equals("date") && tipo2.equals("date"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (compareDate(value,value2).equals("bigger than") || compareDate(value,value2).equals("equal"))
+								list.add(cont);
+							cont++;
+						}
+					}
+					else
+					{
+						if ((tipo.equals("int") || tipo.equals("float")) && (tipo2.equals("int") || tipo2.equals("float")))
+						{
+							int cont = 0;
+							Double num = Double.parseDouble(value);
+							Double num2 = Double.parseDouble(value2);
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (num.compareTo(num2)>0 || num.compareTo(num2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+						else
+						{
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								if (value.compareTo(value2)>0 || value.compareTo(value2)==0)
+									list.add(cont);
+								cont++;
+							}
+						}
+					}
+					break;
+			}
+			return list;
+		}
+		
+		// TODO Auto-generated method stub
+		return null;
+	}
+
+	
+	/*********************************
+	 * CompLitId
+	 */
+	@Override
+	public Object visitCompLitId(sqlParser.CompLitIdContext ctx) {
+		
+		LinkedHashSet<Integer> list = new LinkedHashSet();
+		String op = ctx.getChild(1).getText(); //agarro el relational
+		
+		
+		String id = (String)visit(ctx.getChild(2)); //agarro el primer id
+		if (this.table.hasAttribute(id)) //reviso si existe en la tabla
+		{
+			if (table.isAmbiguous(id)){
+				String error_ = "The call <<"+id+">> is ambiguous @line: " + ctx.getStop().getLine();
+				errors.add(error_);
+				return null;
+			}
+			//tomo el atributo de la tabla y el indice de este
+			Attribute atr = this.table.getID(id);
+			int index = this.table.getattributes().indexOf(atr);
+			
+			//visito el ultimo hijo 
+			String tipo = (String)this.visit(ctx.getChild(0)); //si es literal, voy a recibir el tipo
+			String value = ctx.getChild(0).getText();
+			
+			//creo una bandera para ver si voy a poder castear los tipos
+			boolean flag = false;
+			
+			//Si es un literal
+			if (tipo.equals("int") || tipo.equals("float") || tipo.equals("date") || tipo.equals("char"))
+			{
+				if (value.toUpperCase().equals("NULL"))
+					flag=true;
+				else
+				{
+					if (atr.gettype().equals("int") && (tipo.equals("int") || tipo.equals("float")))
+					{
+						flag = true;
+					}
+					else
+					{
+						if (atr.gettype().equals("float") && (tipo.equals("int") || tipo.equals("float")))
+						{
+							flag = true;
+						}
+						else
+						{
+							if (atr.gettype().equals("char") && (tipo.equals("char") || tipo.equals("date")))
+							{
+								flag = true;
+							}
+							else
+							{
+								if (atr.gettype().equals("date") && (tipo.equals("char") || tipo.equals("date")))
+								{
+									flag = true;
+								}
+								else
+								{
+									String rule_5 = "The type of " + atr.getId() + " can't be compared to " + tipo + " @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+								}
+							}
+								
+						}
+					}
+				}
+			}
+			else
+				if (tipo.equals("Error"))
+				{
+					// no acepto la fecha
+					String rule_5 = "The date " + value + " is not valid @line: " + ctx.getStop().getLine();
+					this.errors.add(rule_5);
+					return null;
+				}
+				
+			
+			if (flag)
+			{
+				/*
+				 * CompareTo devuelve 0 si son iguales
+				 * mas de 0 si el primero es mayor al segundo
+				 * y menos de 0 si el primero es menor al tercero
+				 */
+				if (value.toUpperCase().equals("NULL"))
+				{
+					if (op.equals("=") || op.equals(">=") || op.equals("<="))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (value.toUpperCase().equals(fila.get(index).toUpperCase()))
+								list.add(cont);
+							cont++;
+						}
+					}
+					if (op.equals("<>"))
+					{
+						int cont = 0;
+						for (ArrayList<String> fila : this.table.getData())
+						{
+							if (!value.toUpperCase().equals(fila.get(index).toUpperCase()))
+								list.add(cont);
+							cont++;
+						}
+					}
+							
+				}
+				else
+				switch (op)
+				{
+					//Igual
+					case "=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare null to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)==0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else
+						{
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare null to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (compareDate(comp, value).equals("equal"))
+											list.add(cont);
+										cont++;
+									}	
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)==0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}						
+							}
+						}
+						break;
+					//Distinto
+					case "<>":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)!=0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}					
+						else
+						{	
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (!compareDate(comp, value).equals("equal"))
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)!=0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Menor
+					case "<":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)<0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else
+						{
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (compareDate(comp, value).equals("lower than"))
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)<0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Mayor
+					case ">":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)>0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else
+						{
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (compareDate(comp, value).equals("bigger than"))
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)>0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Menor Igual
+					case "<=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)==0 || valor.compareTo(comp)<0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else
+						{
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("lower than"))
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)==0 || value.compareTo(comp)<0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+							}
+						}
+						break;
+					//Mayor Igual	
+					case ">=":
+						//si es un literal y de tipo int o float
+						if (!value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
+						{
+							Double valor = Double.parseDouble(value);
+							int cont = 0;
+							for (ArrayList<String> fila : this.table.getData())
+							{
+								String s = fila.get(index);
+								if (s.toLowerCase().equals("null"))
+								{
+									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+									this.errors.add(rule_5);
+									return null;
+									
+								}
+								else
+								{
+									Double comp = Double.parseDouble(fila.get(index));
+									if (valor.compareTo(comp)==0 || valor.compareTo(comp)>0)
+										list.add(cont);
+									cont++;
+								}
+							}
+						}
+						else
+						{
+							//Si ambos son date y es con literal
+							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
+							{
+								int cont = 0;
+								for (ArrayList<String> fila : this.table.getData())
+								{
+									
+									String comp = fila.get(index);
+									if (comp.toLowerCase().equals("null"))
+									{
+										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+										this.errors.add(rule_5);
+										return null;
+									}
+									else
+									{
+										if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("bigger than"))
+											list.add(cont);
+										cont++;
+									}
+								}
+							}
+							else
+							{
+								//Si ambos son char o mezcla
+								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
+								{
+									int cont = 0;
+									for (ArrayList<String> fila : this.table.getData())
+									{
+										String comp = fila.get(index);
+										if (comp.toLowerCase().equals("null"))
+										{
+											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
+											this.errors.add(rule_5);
+											return null;
+										}
+										else
+										{
+											if (value.compareTo(comp)==0 || value.compareTo(comp)>0)
+												list.add(cont);
+											cont++;
+										}
+									}
+								}
+							}
+						}
+						break;
+				}
+			}
+			return (T)list;
+		}
+		else
+		{
+			String rule_5 = "La tabla " + this.table.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+			this.errors.add(rule_5);
+			return null;
+		}
+		
+	}
+	
 	
 }
 	
