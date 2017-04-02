@@ -598,6 +598,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	}
 
 	public void open(){
+		
 		int returnVal = fileChooser.showOpenDialog(this);
         
         if (returnVal == JFileChooser.APPROVE_OPTION){
