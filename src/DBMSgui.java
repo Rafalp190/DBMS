@@ -50,7 +50,7 @@ import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-
+import views.SqlDocument;
 import views.TextLineNumber;
 import views.Tree;
 
@@ -569,33 +569,36 @@ public class DBMSgui extends JFrame implements ActionListener {
 	}
  //arreglar open
 	public void open(){
-		int returnVal = fileChooser.showOpenDialog(this);
-        
-        if (returnVal == JFileChooser.APPROVE_OPTION){
-        	file = fileChooser.getSelectedFile();
-        	miSave.setEnabled(true);
-        	btnSave.setEnabled(true);
-        	try{
-        		
-        		FileReader readFile = new FileReader(file.getAbsolutePath());
-        		BufferedReader br = new BufferedReader(readFile);
-        		textArea.setText("");
-        		String newTxt = "";
-        		String currentLine;
-        		while ((currentLine = br.readLine()) != null){
-        			//textArea.append(currentLine+"\n");
-        			newTxt += currentLine+"\n";
-        			}
-        	} catch (Exception e){
-     
-        		System.out.println("Error opening file");
-        	}
-        	
-        	
-        } else {
-        	JOptionPane.showMessageDialog(null,"\nNo se ha encontrado el archivo","ADVERTENCIA!!!",JOptionPane.WARNING_MESSAGE);
-        }
-	}
+		int returnVal = fc.showOpenDialog(this);
+	    
+	    if (returnVal == JFileChooser.APPROVE_OPTION){
+	    	file = fc.getSelectedFile();
+	    	mntmSave.setEnabled(true);
+	    	btnSave.setEnabled(true);
+	    	try{
+	    		
+	    		Scanner scanner = new Scanner(file);
+	    		String newTxt = "";
+	    		while (scanner.hasNextLine()){
+	    			newTxt += scanner.nextLine()+"\n";
+	    		}
+	    
+	    		textArea.setDocument();
+	    		//System.out.println(newTxt);
+	    		scanner.close();
+	    		//br.close();
+	    	} catch (Exception e){
+	    		//e.printStackTrace();
+	    		System.out.println("Error opening file");
+	    	}
+	    	
+	    
+	    	//System.out.println(file.getAbsolutePath());
+	    } else {
+	    	//JOptionPane.showMessageDialog(null,"\nNo se ha encontrado el archivo","ADVERTENCIA!!!",JOptionPane.WARNING_MESSAGE);
+	    }
+	} 	
+	
 
 	private void setCaretListener(JTextPane textArea2){
 		 // Add a caretListener to the editor. This is an anonymous class because it is inline and has no specific name.
