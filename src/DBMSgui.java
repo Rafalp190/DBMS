@@ -50,7 +50,8 @@ import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.tree.ParseTree;
 
-
+import generatedsources.sqlLexer;
+import generatedsources.sqlParser;
 import views.TextLineNumber;
 import views.Tree;
 
@@ -498,13 +499,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        
 	        //errores sintacticos
 	        parser.removeErrorListeners();
-	        parser.addErrorListener(DescriptiveErrorListener.INSTANCE);
+	        parser.addErrorListener(descriptiveErrorListener.INSTANCE);
 	        
 	        ParseTree tree = parser.sql2003Parser(); // begin parsing at rule 'sql2003Parser'
 	        
-	        if (!DescriptiveErrorListener.errors.isEmpty()){
-	        	OutputArea.setText(DescriptiveErrorListener.errors);
-	        	DescriptiveErrorListener.errors = "";
+	        if (!descriptiveErrorListener.errors.isEmpty()){
+	        	OutputArea.setText(descriptiveErrorListener.errors);
+	        	descriptiveErrorListener.errors = "";
 	        	return ;
 	        }
 	        
