@@ -13,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -561,15 +562,41 @@ public class DBMSgui extends JFrame implements ActionListener {
 	}
 
 	private void saveAs() {
-		// TODO Auto-generated method stub
-		
+		int returnVal = fileChooser.showSaveDialog(this);
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            file = fileChooser.getSelectedFile();
+            try{
+				PrintWriter writer = new PrintWriter(file.getAbsolutePath(), "UTF-8");
+				writer.print(textArea.getText());
+				writer.close();
+			}catch (Exception e ){
+				System.out.println("Error saving file");
+			}
+            
+            System.out.println(file.getAbsolutePath());
+            //This is where a real application would save the file.
+            //log.append("Saving: " + file.getName() + "." + newline);
+        } else {
+            //log.append("Save command cancelled by user." + newline);
+        }
 	}
 
 	private void save() {
-		// TODO Auto-generated method stub
-		
+		if (file != null){
+			System.out.println("Saved in "+ file.getAbsolutePath());
+			try{
+				PrintWriter writer = new PrintWriter(file.getAbsolutePath(), "UTF-8");
+				writer.print(textArea.getText());
+				writer.close();
+			}catch (Exception e ){
+				System.out.println("Error saving file");
+			}
+			
+		}else{
+			saveAs();
+		}
 	}
- //arreglar open
+
 	public void open(){
 		int returnVal = fileChooser.showOpenDialog(this);
         
@@ -579,23 +606,24 @@ public class DBMSgui extends JFrame implements ActionListener {
         	btnSave.setEnabled(true);
         	try{
         		
-        		FileReader readFile = new FileReader(file.getAbsolutePath());
-        		BufferedReader br = new BufferedReader(readFile);
-        		textArea.setText("");
+        		Scanner scanner = new Scanner(file);
         		String newTxt = "";
-        		String currentLine;
-        		while ((currentLine = br.readLine()) != null){
-        			//textArea.append(currentLine+"\n");
-        			newTxt += currentLine+"\n";
-        			}
+        		while (scanner.hasNextLine()){
+        			newTxt += scanner.nextLine()+"\n";
+        		}
+        		textArea.setText(newTxt);
+        		//System.out.println(newTxt);
+        		scanner.close();
+        		//br.close();
         	} catch (Exception e){
-     
+        		//e.printStackTrace();
         		System.out.println("Error opening file");
         	}
         	
-        	
+        
+        	//System.out.println(file.getAbsolutePath());
         } else {
-        	JOptionPane.showMessageDialog(null,"\nNo se ha encontrado el archivo","ADVERTENCIA!!!",JOptionPane.WARNING_MESSAGE);
+        	//JOptionPane.showMessageDialog(null,"\nNo se ha encontrado el archivo","ADVERTENCIA!!!",JOptionPane.WARNING_MESSAGE);
         }
 	}
 
@@ -641,6 +669,7 @@ public class DBMSgui extends JFrame implements ActionListener {
        });
 			
 	}
+	
 	public int getRow(int pos, JTextComponent editor) {
         int rn = (pos==0) ? 1 : 0;
         try {
@@ -760,8 +789,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		//}
 		//return null;
 	}
-	
-	
+
 	public JTable createNewTable(Schema dataBases){
 		String [] columnNames = {"Database","Table Number"};
 		DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
