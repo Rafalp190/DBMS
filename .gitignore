@@ -26,3 +26,4 @@ tmp/**/*
 *.swp
 *~.nib
 local.properties
+.classpath
