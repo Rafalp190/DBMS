@@ -42,13 +42,13 @@ public class Value {
 	/**
 	 * @return the type
 	 */
-	public String getType() {
+	public String gettype() {
 		return type;
 	}
 	/**
 	 * @param type the type to set
 	 */
-	public void setType(String type) {
+	public void settype(String type) {
 		this.type = type;
 	}
 	/**

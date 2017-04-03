@@ -36,107 +36,30 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import generatedsources.sqlLexer;
 import generatedsources.sqlParser;
-import sun.security.util.Length;
 
 
-/**
- * @author Rafa
- *
- * @param <T>
- */
+
 public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
+
+	// Attributes
 	
-	//Metadata attributes
-	private String path;
-	private Schema schema = new Schema();
-	private DataBase database = new DataBase();
-	//Operation attributes
-	private DataBase current = new DataBase();
-	private Table table = new Table();
-	private ArrayList<String> errors = new ArrayList<String>();
+	private String dataPath;
+	private ArrayList<String> errores = new ArrayList<String>();
 	private ArrayList<String> messages = new ArrayList<String>();
+	private Schema dataBases = new Schema();
+	private DataBase actual = new DataBase();
+	private Table table_use = new Table();
 	private int inserted_rows = 0;
 	private int deleted_rows = 0;
 	private int updated_rows = 0;
-
-	/**
-	 * Cleans the data values to make new statements
-	 */
-	public void clearValues(){
-		table = new Table();
-		errors = new ArrayList<String>();
+	
+	public void resetValues(){
+		errores = new ArrayList<String>();
 		messages = new ArrayList<String>();
+		table_use = new Table();
 		inserted_rows = 0;
 		deleted_rows = 0;
 		updated_rows = 0;
-		
-	}
-	/**
-	 * Loads the Database Schema path and previous databases
-	 */
-	public void dbmsVisitor(){
-		Path currentRelativePath = Paths.get("");
-		path = currentRelativePath.toAbsolutePath().toString()+ "\\Databases\\";
-		loadSchema();
-	}
-	
-	/**
-	 * Unserializes the Schema
-	 */
-	public void loadSchema(){
-		try{
-			FileInputStream fstream = new FileInputStream(this.path+"schema.bin");
-			BufferedReader reader = new BufferedReader(new FileReader(this.path+"schema.bin"));
-			if (reader.readLine()!= null){
-				ObjectInputStream instream = new ObjectInputStream(fstream);
-				this.schema = (Schema)instream.readObject();
-			}
-		}
-		catch (FileNotFoundException e){
-			e.printStackTrace();
-		}
-		catch (IOException e){
-			e.printStackTrace();
-		}
-		catch(ClassNotFoundException e){
-			e.printStackTrace();
-		}
-	}
-	
-	/**
-	 * Serializes the schema object
-	 */
-	public void saveSchema(){
-		try {
-			FileOutputStream fstream = new FileOutputStream(this.path+"schema.bin");
-			ObjectOutputStream outstream = new ObjectOutputStream(fstream);
-			outstream.writeObject(this.schema);
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
-	
-	/**
-	 * Serializes a table 
-	 * @param name
-	 * @param tab
-	 * @param db_name
-	 */
-	public void saveTable(String name, Table tab, String db_name){
-		try{
-			FileOutputStream fstream = new FileOutputStream(this.path+"\\"+ db_name +"\\"+name +".bin");
-			ObjectOutputStream outstream = new ObjectOutputStream(fstream);
-			outstream.writeObject(tab);
-		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
 	}
 	
 	public int getInserted_rows() {
@@ -178,22 +101,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	}
 
 	/**
-	 * @return the errors
+	 * @return the errores
 	 */
-	public ArrayList<String> geterrors() {
-		return errors;
+	public ArrayList<String> getErrores() {
+		return errores;
 	}
 	
 	/**
-	 * @return the errors in toString form
+	 * @return the errores in toString form
 	 */
-	public String errorsToString()
+	public String erroresToString()
 	{
 		String res = "Errores:\n";
 		int cont = 1;
-		for (String i: this.errors)
+		for (String i: this.errores)
 		{
-			res += "Error No. " + Integer.toString(cont) + " -> " + i + "\n";
+			res += "Error #" + Integer.toString(cont) + " -> " + i + "\n";
 			cont++;
 		}
 		res += Integer.toString(cont-1) + " ERRORES EN TOTAL";
@@ -201,661 +124,580 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			res = "";
 		return res;
 	}
-	/**
-	 * @param errors the errors to set
-	 */
-	public void seterrors(ArrayList<String> errors) {
-		this.errors = errors;
-	}
-	
-	public String toStringMessages(){
-		String out = "";
-		for(String i: this.messages)
-			out += i+"\n";
-		return out;
-	}
-	public DataBase getCurrent() {
-		return current;
-	}
-
-	public void setCurrent(DataBase current) {
-		this.current = current;
-	}
-	
-	public boolean PrimaryKey(ArrayList<String> fila, Integer indice)
-	{
-		ArrayList<Constraint> key = this.table.getPrimaryKeys();
-		
-		ArrayList<Integer> primary = new ArrayList<Integer>();
-		
-		if (key.size() != 0)
-		{
-			Constraint llave = key.get(0);
-			for (String id : llave.getIDS_local())	
-			{
-				Attribute atr = this.table.getID(id);
-				primary.add(this.table.getattributes().indexOf(atr));
-			}
-			
-			int i=0;
-			for (ArrayList<String> newfila:this.table.getData())
-			{
-				int cont=0;
-				for (int index : primary)
-				{
-					if (newfila.get(index).equals(fila.get(index)))
-					{
-						cont++;
-					}
-				}
-				if (cont == primary.size())
-				{
-					if (indice!=-1)
-					{
-						if (indice!= i)
-						{
-							return false;
-						}
-					}
-					else
-						return false;
-				}
-				i++;
-			}
-		}
-		
-		return true;
-	}
-	
-	
-	//devuelve si la llave foreana existe en la/las otras tablas
-	public boolean ForeignKey(ArrayList<String> fila, Integer indice)
-	{
-		ArrayList<Constraint> key = this.table.getForeignKey();
-		
-		int exist = 0;
-		for (Constraint llave : key)
-		{
-			//tengo que ir a traer la tabla a la que hacen referencia
-			//recorrer la tabla y ver si el valor en la fila en el indice del id local existe en la tabla
-			//aumento un contador
-			//si el contador al final es igla al total de constraints devuelve true 
-			Table ref_tabla = this.current.getTable(llave.getId_ref());
-			if (ref_tabla != null)
-			{
-				int index = 0;
-				int cont = 0;
-				for (String id : llave.getIDS_refs()) 
-				{
-					//Traemos el attribute de la tabla a la que hacemos referencia
-					//Y el indice de esta en la tabla
-					Attribute atr = ref_tabla.getID(id);
-					int index_ref = ref_tabla.getattributes().indexOf(atr);
-					
-					//Traems el attribute de la tabla local
-					//Y el indice de este en la tabla
-					String local = llave.getIDS_local().get(index);
-					Attribute atr2 = this.table.getID(local);
-					int index_loc = this.table.getattributes().indexOf(atr2);
-					
-					for (ArrayList<String> row:ref_tabla.getData())
-					{
-						if(row.get(index_ref).equals(fila.get(index_loc)))
-						{
-							cont++;
-						}
-					}
-					
-					index++;
-				}
-				if (cont != llave.getIDS_refs().size())
-					return false;
-				else
-					exist++;
-			}
-			else
-				return false;
-		}
-		
-		if (exist == key.size())
-			return true;
-		else
-			return false;
-	}
 
 	/**
-	 * CARTESIAN JOIN TO USE IN FROM STATEMENT
-	 * 
-	 * @param tb1
-	 * @param tb2
-	 * @return
+	 * @param errores the errores to set
 	 */
-	public Table CartesianCross(Table tb1, Table tb2){
-		//tb1.setNameByTable(); ya estan mezclados
-		tb2.setNamesByTable();
-		Table nTb = new Table();
-		
-		nTb.setName("Select");
-		
-		//agregamos todos los atributos
-		ArrayList<Attribute> at = new ArrayList();
-		at.addAll(tb1.getattributes());
-		at.addAll(tb2.getattributes());
-		nTb.setattributes(at);
-		
-		//agregamos nuevos nombres tabla.atributo
-		ArrayList<String> otN = new ArrayList();
-		otN.addAll(tb1.getOthersIds());
-		otN.addAll(tb2.getOthersIds());
-		nTb.setOthersIds(otN);
-		
-		//Cross Join of Data
-		ArrayList<ArrayList<String>> data = new ArrayList();
-		for (ArrayList<String> tupla1: tb1.getData()){
-			for (ArrayList<String> tupla2: tb2.getData()){
-				ArrayList<String> tupla = new ArrayList();
-				tupla.addAll(tupla1);
-				tupla.addAll(tupla2);
-				data.add(tupla);
-			}
-		}
-		nTb.setData(data);
-		return nTb;
+	public void setErrores(ArrayList<String> errores) {
+		this.errores = errores;
 	}
 	
+	/*
+	 * Cargar las Schema (directorios) ya creados
+	 */
+	public dbmsVisitor()
+	{
+		Path currentRelativePath = Paths.get("");
+		dataPath = currentRelativePath.toAbsolutePath().toString() + "\\data\\";
+		cargarDBs();
+	}
 	
-
-/**
- * 
- * 
- * 
- * 
- * 
- * VISITOR LOGIC
- *
- *
- *
- *
- *
- *
- */
+	/*
+	 * Des serializa el objeto
+	 */
+	public void cargarDBs()
+	{
+		try {
+			FileInputStream fis = new FileInputStream(this.dataPath+"dbs.bin");
+			BufferedReader br = new BufferedReader(new FileReader(this.dataPath+"dbs.bin"));     
+			if (br.readLine() != null)
+			{
+				ObjectInputStream in = new ObjectInputStream(fis);
+				this.dataBases = (Schema)in.readObject();
+				//fis.close();
+				//in.close();
+			}
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	
+	/*
+	 * Serializa el objeto
+	 */
+	public void guardarDBs()
+	{
+		try {
+			FileOutputStream fos = new FileOutputStream(this.dataPath+"dbs.bin");
+			ObjectOutputStream out = new ObjectOutputStream(fos);            
+            // Escribir el objeto en el fichero
+            out.writeObject(this.dataBases);
+            //out.close();
+            //fos.close();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	/*
+	 * Serializa una Tabla
+	 */
+	public void saveTable(String dbName, String name, Table t)
+	{
+		try {
+			FileOutputStream fos = new FileOutputStream(this.dataPath + "\\" + dbName + "\\" + name + ".bin");
+			ObjectOutputStream out = new ObjectOutputStream(fos);            
+            // Escribir el objeto en el fichero
+            out.writeObject(t);
+            //out.close();
+            //fos.close();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}	
+	public String toStringMessages()
+	{
+		String ret = "";
+		for (String i: this.messages)
+			ret += i + "\n";
+		return ret;
+	}
 	public Object visitSql2003Parser (sqlParser.Sql2003ParserContext ctx){
 		Object obj = visitChildren(ctx);
-		if(this.updated_rows != 0) this.messages.add("Updated "+updated_rows+" succesfully");
-		if(this.inserted_rows != 0) this.messages.add("Inserted "+inserted_rows+" succesfully);");
+		if (this.updated_rows != 0) this.messages.add("Update "+updated_rows+" con exito");
+		if (this.inserted_rows != 0) this.messages.add("Insert "+inserted_rows+" con exito");
 		return obj;
-	}
-	
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitUse_schema_statement(generatedsources.sqlParser.Use_schema_statementContext)
-	 *
-	 *
-	 *
-	 *
-	 *
-	 *
-	 * 
-	 * VISITOR LOGIC : DATA DEFINITION LANGUAGE
-	 * 
-	 * 
-	 * 
-	 * 
-	 * 
-	 * 
-	 * VISITOR LOGIC: USE STATEMENT
-	 */
-	@Override
-	public T visitUse_schema_statement(@NotNull sqlParser.Use_schema_statementContext ctx){
+	}	
+	@Override 
+	public T visitUse_schema_statement(@NotNull sqlParser.Use_schema_statementContext ctx) 
+	{ 
 		String ID = ctx.ID().getText();
-		boolean exists = false;
-		for (DataBase db: this.schema.getSchema())
-			if(db.getName().equals(ID)){
-				exists = true;
-				this.setCurrent(db);
+		boolean find = false;
+		for (DataBase i: this.dataBases.getSchema())
+			if (i.getName().equals(ID))
+			{
+				find = true;
+				this.setActual(i);
 				break;
 			}
-		if (exists == false){
-			this.setCurrent(new DataBase());
-			String rule_1 = "Can't use database\""+ ID + "\" because it doesnt exist @line: "+ ctx.getStop().getLine();
-			this.errors.add(rule_1);
-			}
-		else{
-			System.out.println("Database \"" + ID +"\" in USE");
-			this.messages.add("Database \"" + ID +"\" in USE");			
-		}
-		return (T)"";
-	}
-	
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitSchema_definition(generatedsources.sqlParser.Schema_definitionContext)
-	 *
-	 *
-	 *
-	 * VISITOR LOGIC: CREATE DATABASE STATEMENT
-	 */
-	@Override
-	public T visitSchema_definition(@NotNull sqlParser.Schema_definitionContext ctx){
-		String ID = ctx.ID().getText();
-		DataBase db = new DataBase(ID);
-		File dir = new File(this.path+ID);
-		boolean created = dir.mkdirs();
-		if (!created){
-			String rule_2 = "Can't create Database " + ID + " because a Database with the same name already exists @line: " + ctx.getStop().getLine();
-			this.errors.add(rule_2);
-		}
-		else{
-			System.out.println("Database \""+ ID + " created successfully");
-			this.messages.add("Database \""+ ID + " created successfully");
-			this.schema.addDataBase(db);
-		}
-		return (T)"";
-	}
-	/**
-	 * VISITOR LOGIC: DROP DATABASE STATEMENT
-	 * (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitDrop_schema_statement(generatedsources.sqlParser.Drop_schema_statementContext)
-	 */
-	@Override
-	public Object visitDrop_schema_statement(sqlParser.Drop_schema_statementContext ctx){
-		String ID = ctx.ID().getText();
-		File dir = new File(this.path+ID);
-		if (dir.exists())
+		if (find == false)
 		{
-			//Creates new database array list that doesn't include the deleted one
-			ArrayList<DataBase> new_schema = new ArrayList<DataBase>();
-			DataBase delete = new DataBase();
-			boolean exists = false;
-			for(DataBase db: this.schema.getSchema())
-				if (!db.getName().equals(ID))
-					new_schema.add(db);
-				else{
-					exists = true;
-					delete = db;
-				}
-			if (exists)
-			{
-				int reg = 0;
-				for (Table t: delete.getTables())
-					reg+= t.getData().size();
-				int confirmation = JOptionPane.showConfirmDialog(null, "Delete dabase \""+ID+"\" with "+Integer.toString(reg)+ " registries?", "DROP DATABASE", JOptionPane.YES_NO_OPTION);
-				if (confirmation == JOptionPane.YES_OPTION)
+			this.setActual(new DataBase());
+			String rule_5 = "No se puede usar la Base de Datos \"" + ID + "\" porque no ha sido creada @line: " + ctx.getStop().getLine();
+			this.errores.add(rule_5);
+		}
+		else
+		{
+			System.out.println("DataBase \"" + ID + "\" actualmente en uso");
+			this.messages.add("DataBase \"" + ID + "\" actualmente en uso");
+		}
+		return (T)"";
+		//return visitChildren(ctx); 
+	}	
+	@Override 
+	public T visitSchema_definition(@NotNull sqlParser.Schema_definitionContext ctx)
+	{ 		
+		String ID = ctx.ID().getText();
+		DataBase new_DB = new DataBase(ID);
+        File new_directory = new File(this.dataPath+ID);
+        boolean succes = new_directory.mkdirs();        
+        if (!succes)
+        {
+        	String rule_1 = "No se puede crear la Base de Datos " + ID + " porque ya existe otra con el mismo nombre @line: " + ctx.getStop().getLine();
+        	this.errores.add(rule_1);
+        }
+        else
+        {
+        	System.out.println("DataBase \"" + ID + "\" creada exitosamente");
+        	this.messages.add("DataBase \"" + ID + "\" creada exitosamente");
+        	this.dataBases.addDataBase(new_DB);
+    		//guardarDBs();
+        }
+		return (T)"";
+		//return visitChildren(ctx); 
+	}	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitDrop_schema_statement(sqlParser.Drop_schema_statementContext) 
+	 */
+	@Override
+	public Object visitDrop_schema_statement(sqlParser.Drop_schema_statementContext ctx) {
+		// TODO Auto-generated method stub
+		String ID = ctx.ID().getText();
+		File directory = new File(this.dataPath+ID);
+		if (directory.exists())
+		{			
+			// Establecer nuevo set de Schema
+			ArrayList<DataBase> new_dataBases = new ArrayList<DataBase>();
+			DataBase toDelete = new DataBase();
+			boolean exist = false;
+			for(DataBase i: this.dataBases.getSchema())
+				if (! i.getName().equals(ID))
+					new_dataBases.add(i);
+				else
 				{
-					//Saves the new Schema
-					this.schema.setSchema(new_schema);
-					if (this.getCurrent().getName().equals(ID))
-						this.setCurrent(new DataBase());
-					File[] current;
-					Stack<File> stack = new Stack<File>();
-					stack.push(dir);
-					while (!stack.isEmpty()){
-						if (stack.lastElement().isDirectory()){
-							current = stack.lastElement().listFiles();
-									if (current != null){
-										if (current.length > 0){
-											for (File cf: current)
-												stack.push(cf);
-										}
-										else{
-											stack.pop().delete();
-										}
-									}
-						}
-						else{
-							stack.pop().delete();
-						}
-					}
-					System.out.println("Database \"" + ID + "\" deleted succesfully");
-					this.messages.add("Database \"" + ID + "\" deleted succesfully");
+					exist = true;
+					toDelete = i;
 				}
-			}
-			else{
-				String nonexistent = "Database \""+ID+ "can't be deleted because it doesn't exist @line: "+ ctx.getStop().getLine();
-				this.errors.add(nonexistent);
-			}
-		}
-		else{
-			String nonexistent = "Database \""+ID+ "can't be deleted because it doesn't exist @line: "+ ctx.getStop().getLine();
-			this.errors.add(nonexistent);
-		}
-		return (T)"";
-	}
-	/**
-	 * VISITOR LOGIC: ALTER DATABASE STATEMENT
-	 */
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitAlter_database_statement(generatedsources.sqlParser.Alter_database_statementContext)
-	 */
-	@Override
-	public Object visitAlter_database_statement(sqlParser.Alter_database_statementContext ctx){
-		String ID = ctx.ID(0).getText();
-		String NewID = ctx.ID(1).getText();
-		File dir = new File(this.path + ID);
-		if (!ID.equals(NewID)){
-			boolean exists = false;
-			for(DataBase db: this.schema.getSchema())
-				if (db.getName().equals(ID)){
-					db.setName(NewID);
-					exists = true;
-					break;
-				}
-			if (exists){
-				//Saves changes in filesystem
-				if (this.getCurrent().getName().equals(ID)){
-					this.getCurrent().setName(NewID);
-				}
-				dir.renameTo(new File(this.path + NewID));
-				System.out.println("DataBase \""+ ID + "\" renamed to \""+ NewID + "\" succesfully");
-				this.messages.add("DataBase \""+ ID + "\" renamed to \""+ NewID + "\" succesfully");
-			}
-			else{
-				String nonexistentdb = "DataBase can't be renamed because \"" + ID +"\" doesn't exist @line: "+ctx.getStop().getLine();
-				this.errors.add(nonexistentdb);
-			}
-		}
-		return (T)"";
-	}
-	/**
-	 * VISITOR LOGIC: ALTER TABLE RENAME TO STATEMENT
-	 */
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitRename_table_statement(generatedsources.sqlParser.Rename_table_statementContext)
-	 */
-	@Override
-	public Object visitRename_table_statement(sqlParser.Rename_table_statementContext ctx){
-		String ID = ctx.ID(0).getText();
-		String NewID = ctx.ID(1).getText();
-		
-		if (!ID.equals(NewID))
-		{
-			if (this.getCurrent().getName().isEmpty())
+			if (exist)
 			{
-				String noDB = "No database in use @line: " + ctx.getStop().getLine();
-				this.errors.add(noDB);
+				// Verificar si el usuario quiere eliminar la DB con una ventana de confirmacion
+				// Contar registros totales en la DB
+				int n_registros = 0;
+				for (Table i: toDelete.getTables())
+					n_registros += i.getData().size();
+				int reply = JOptionPane.showConfirmDialog(null, "Borrar base de datos \"" + ID + "\" con " + Integer.toString(n_registros) + " registros?", "DROP DATABASE", JOptionPane.YES_NO_OPTION);
+		        if (reply == JOptionPane.YES_OPTION)
+		        {		        
+					// Guardar nuevo set de Schema
+					this.dataBases.setSchema(new_dataBases);
+					//guardarDBs();
+					// Verificar si la DataBase actual es la eliminada para quitar la referencia
+					if (this.getCurrent().getName().equals(ID))
+						this.setActual(new DataBase());
+					// Borrar directorio
+					File[] currList;
+					Stack<File> stack = new Stack<File>();
+					stack.push(directory);
+					while (! stack.isEmpty())
+					{
+					    if (stack.lastElement().isDirectory())
+					    {
+					        currList = stack.lastElement().listFiles();
+					        if (currList != null)
+					        {
+						        if (currList.length > 0)
+						        {
+						            for (File curr: currList)
+						                stack.push(curr);
+						        }
+						        else			        
+						            stack.pop().delete();
+					        }
+					    } 
+					    else
+					        stack.pop().delete();
+					}
+					System.out.println("DataBase \"" + ID + "\" eliminada exitosamente");
+					this.messages.add("DataBase \"" + ID + "\" eliminada exitosamente");
+		        }
 			}
 			else
 			{
-				//Verifies table with ID exists
+				String no_database_exist = "No se puede eliminar la Base de Datos \"" + ID + "\" porque no ha sido creada @line: " + ctx.getStop().getLine();
+	        	this.errores.add(no_database_exist);
+			}
+		}
+		else
+		{
+			String no_database_exist = "No se puede eliminar la Base de Datos \"" + ID + "\" porque no ha sido creada @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_exist);
+		}
+		return (T)"";
+		//return super.visitDrop_schema_statement(ctx);
+	}
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitAlter_database_statement(sqlParser.Alter_database_statementContext)
+	 */
+	@Override
+	public Object visitAlter_database_statement(sqlParser.Alter_database_statementContext ctx) {
+		// TODO Auto-generated method stub
+		String ID = ctx.ID(0).getText();
+		String NEW_ID = ctx.ID(1).getText();
+		File directory = new File(this.dataPath + ID);
+		// Verificar que los ID no sean iguales porque si son iguales no se hace nada
+		if (! ID.equals(NEW_ID))
+		{
+			boolean exist = false;
+			for(DataBase i: this.dataBases.getSchema())
+				if (i.getName().equals(ID))
+				{
+					// Si encuentra una ocurrencia se hace el cambio de nombre
+					i.setName(NEW_ID);
+					exist = true;
+					break;
+				}
+			// Verificar si existe la DataBase a renombrar
+			if (exist)
+			{
+				// Guardar el cambio
+				//guardarDBs();
+				// Verificar si hay que cambiar tambien el nombre de la DataBase actual
+				if (this.getCurrent().getName().equals(ID))
+					this.getCurrent().setName(NEW_ID);
+				// Renombrar el directorio
+				directory.renameTo(new File(this.dataPath + NEW_ID));
+				System.out.println("DataBase \"" + ID + "\" renombrada a \"" + NEW_ID +"\" exitosamente");
+				this.messages.add("DataBase \"" + ID + "\" renombrada a \"" + NEW_ID +"\" exitosamente");
+			}
+			else
+			{
+				String no_database_exist = "No se puede renombrar la Base de Datos \"" + ID + "\" porque no ha sido creada @line: " + ctx.getStop().getLine();
+	        	this.errores.add(no_database_exist);
+			}
+				
+		}
+		return (T)"";
+		//return super.visitAlter_database_statement(ctx);
+	}
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitRename_table_statement(sqlParser.Rename_table_statementContext)	 
+	 */
+	@Override
+	public Object visitRename_table_statement(sqlParser.Rename_table_statementContext ctx) {
+		// TODO Auto-generated method stub
+		String ID = ctx.ID(0).getText();
+		String NEW_ID = ctx.ID(1).getText();		
+		// Verificar que los ID no sean iguales porque si son iguales no se hace nada
+		if (! ID.equals(NEW_ID))
+		{
+			// Verificar que se este utilizando una base de datos
+			if (this.getCurrent().getName().isEmpty())
+			{
+				String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+	        	this.errores.add(no_database_in_use);
+			}
+			else
+			{
+				// Verificar que la tabla con ID exista
 				if (this.getCurrent().existTable(ID))
-				{	
-					//Verifies that a table with that name already exists
-					if(!this.getCurrent().existTable(NewID))
-					{
-						//Rename references
-						if (!this.getCurrent().existRef(ID))
+				{
+					// Verificar que no exista una tabla ya creada con ID == NEW_ID
+					if (! this.getCurrent().existTable(NEW_ID))
+					{						
+						// Renombrar referencias
+						if (this.getCurrent().existRef(ID))
 						{
-							for (Table t: this.getCurrent().getTables())
-								t.renameRefIdFK(ID, NewID);
+							for (Table i: this.getCurrent().getTables())
+								i.renameRefIdFK(ID, NEW_ID);
 						}
-						if (!this.getCurrent().getConstraints_refs().isEmpty())
-						{
-							this.getCurrent().renameRef(ID, NewID);
-						}	
-						System.out.println("Table \"" + ID + "\" renamed successfully to \"" + NewID + "\"");
-						this.messages.add("Table \"" + ID + "\" renamed successfully to \"" + NewID + "\"");
-						Table tab = this.getCurrent().getTable(ID);
-						tab.setName(NewID);
-						File dir = new File(this.path+"\\"+this.getCurrent().getName()+"\\"+ ID + ".bin");
-						dir.renameTo(new File(this.path +"\\"+ this.getCurrent().getName()+"\\"+ NewID +".bin"));
+						if (! this.getCurrent().getConstraints_refs().isEmpty())
+							this.getCurrent().renameRef(ID, NEW_ID);
+						System.out.println("La Tabla \"" + ID + "\" se ha renombrado exitosamente a \"" + NEW_ID + "\"");
+						this.messages.add("La Tabla \"" + ID + "\" se ha renombrado exitosamente a \"" + NEW_ID + "\"");
+						Table new_table = this.getCurrent().getTable(ID);
+						new_table.setName(NEW_ID);
+						File directory = new File(this.dataPath + "\\" + this.getCurrent().getName() + "\\" + ID + ".bin");
+						// Renombrar el directorio
+						directory.renameTo(new File(this.dataPath + "\\" + this.getCurrent().getName() + "\\" + NEW_ID + ".bin"));						
+						// Guardar cambio en la DB
+						//guardarDBs();
 					}
 					else
 					{
-						String tablealreadyexists = "A table with the same name already exists in the DataBase \""+ this.getCurrent().getName()+"\" @line: "+ ctx.getStop().getLine();
-						this.errors.add(tablealreadyexists);
+						String table_already_exist = "Ya existe una tabla con el mismo nombre en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+			        	this.errores.add(table_already_exist);
 					}
 				}
 				else
 				{
-					String table_not_found = "The table \"" + ID + "\" does not exist in the DataBase \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
-					this.errors.add(table_not_found);
+					String table_not_found = "La Tabla \"" + ID + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+					this.errores.add(table_not_found);
 				}
 			}
 		}
-		return(T)"";
+		return (T)"";
+		//return super.visitRename_table_statement(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: CREATE TABLE STATEMENT
-	 */
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitTable_definition(generatedsources.sqlParser.Table_definitionContext)
+	 * @see sqlBaseVisitor#visitTable_definition(sqlParser.Table_definitionContext)
 	 */
 	@Override
-	public Object visitTable_definition(sqlParser.Table_definitionContext ctx){
+	public Object visitTable_definition(sqlParser.Table_definitionContext ctx) {
+		// TODO Auto-generated method stub
 		String name = ctx.ID().getText();
-		ArrayList<Attribute> atr = new ArrayList<Attribute>();
+		ArrayList<Attribute> atrs = new ArrayList<Attribute>();
 		ArrayList<Constraint> pks = new ArrayList<Constraint>();
 		ArrayList<Constraint> fks = new ArrayList<Constraint>();
 		ArrayList<Constraint> checks = new ArrayList<Constraint>();
-		ArrayList<String> ids = new ArrayList<String>();
+		ArrayList<String> const_ids = new ArrayList<String>();
 		int errores = 0;
-		//Verifies the data base exists
+		// Verificar que se este utilizando una base de datos
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
-			errores++;
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
+        	errores++;
 		}
 		else
-		{
-			//Tables cant have the same name
-			if (!this.getCurrent().existTable(name))
+		{		
+			// No se puede repetir nombre en las tablas
+			if (! this.getCurrent().existTable(name))
 			{
-				for(int i = 4; i <ctx.getChildCount()-2; i++)
-				{
+				for(int i = 4; i < ctx.getChildCount()-2; i++)
+				{			
 					ParseTree child = ctx.getChild(i);
-					String childtxt = child.getText();
-					//Ignore comma
-					if (!childtxt.equals(","))
+					String child_text = child.getText();
+					// Ignorar la coma
+					if (! child_text.equals(","))
 					{
-						//Attribute
-						if(child.getChildCount()==2)
-						{
-							atr.add((Attribute)this.visit(child));
-						}
-						//Constraint
+						// Attribute
+						if (child.getChildCount() == 2)
+							atrs.add((Attribute)this.visit(child));
+						// Constraint
 						else
 						{
-							Constraint constr = (Constraint)this.visit(child);
-							ids.add(constr.getId());
-							switch (constr.gettype())
+							Constraint co = (Constraint)this.visit(child);
+							const_ids.add(co.getId());
+							switch (co.gettype())
 							{
-							case "Primary Key":
-								if (pks.isEmpty())
-									pks.add(constr);
-								else
-								{
-									String multiplePK = "A table can't have more than one Primary Key @line: " + ctx.getStop().getLine();
-									this.errors.add(multiplePK);
-								}
-								break;
-							
-							case "Foreign Key":
-								fks.add(constr);
-								break;
-							case "Check":
-								checks.add(constr);
-								break;
+								case "Primary Key": 
+									if (pks.isEmpty())
+										pks.add(co);
+									// Solo puede haber una PK
+									else
+									{
+										String more_than_one_pk = "Una tabla no puede tener declarada mas de una Primary Key @line: " + ctx.getStop().getLine();
+							        	this.errores.add(more_than_one_pk);
+							        	errores++;
+									}
+									break;
+								case "Foreign Key":
+									fks.add(co);								
+									break;
+								case "Check":
+									checks.add(co);
+									break;
 							}
 						}
 					}
 				}
-				//Validations
-				if(errores == 0)
+				// Validaciones
+				
+				if (errores == 0)
 				{
-					//No attribute can have the same name
-					ArrayList<String> attribute_names = new ArrayList<String>();
-					boolean error1 = false;
-					int cont = 0;
-					for (Attribute a: atr)
+					// Ningun atributo se puede llamar igual
+					ArrayList<String> attrs_names = new ArrayList<String>();
+					boolean err1 = false;
+					int i_cont = 0;
+					for (Attribute i: atrs)
 					{
-						String name_a = a.getId();
-						attribute_names.add(name_a);
-						error1 = false;
-						for (Attribute j: atr.subList(cont+1, atr.size()))
-						{
-							if (name_a.equals(j.getId()))
+						String name_i = i.getId();
+						attrs_names.add(name_i);
+						err1 = false;
+						for (Attribute j: atrs.subList(i_cont+1, atrs.size()))
+							if (name_i.equals(j.getId()))
 							{
-								error1= true;
+								err1 = true;
 								errores++;
 								break;
 							}
-						}
-						if (error1 == true)
+						if (err1 == true)
 						{
-							String attr_declared = "The attribute \"" + name_a + "\" is declared more than once @line: " + ctx.getStop().getLine();
-							this.errors.add(attr_declared);
+							String attr_declared = "El atributo \"" + name_i + "\" esta declarado mas de una vez @line: " + ctx.getStop().getLine();
+				        	this.errores.add(attr_declared);
 						}
-						cont++;
+						i_cont++;
 					}
-					// No constraint can have the same name
-					error1 = false;
-					cont = 0;
-					for (String i: ids)
+					// Ninguna constraint se puede llamar igual
+					err1 = false;
+					i_cont = 0;
+					for (String i: const_ids)
 					{
-						error1 = false;
-						for (String j: ids.subList(cont, ids.size()))
-						{
+						err1 = false;
+						for (String j: const_ids.subList(i_cont+1, const_ids.size()))
 							if (i.equals(j))
 							{
-								error1 = true;
+								err1 = true;
 								errores++;
 								break;
 							}
-						}
-						if (error1== true)
+						if (err1 == true)
 						{
-							String const_declared = "The constraint \""+ i +"\" is declared more than once @line: " +ctx.getStop().getLine();
-							this.errors.add(const_declared);
+							String const_declared = "La Constraint \"" + i + "\" esta declarada mas de una vez @line: " + ctx.getStop().getLine();
+				        	this.errores.add(const_declared);
 						}
-						cont++;
+						i_cont++;
 					}
-					//Local IDs belong to table
+					// Local IDS pertenecen a la tabla
 					if (errores == 0)
-					{
-						if (!pks.isEmpty())
+					{			
+						// Primary Keys
+						if (! pks.isEmpty())
 						{
 							Constraint pk = pks.get(0);
-							ArrayList<String> idPk = pk.getIDS_local();
+							ArrayList<String> ids = pk.getIDS_local();
 							for (String i: ids)
-							{
-								if (!attribute_names.contains(i))
+								if (! attrs_names.contains(i))
 								{
-									String localIDnotfound = "The attribute \""+ i+ "\" from the Primary Key \"" + pk.getId() + "\" is not declared in the table \"" + name + "\" @line: " + ctx.getStop().getLine();
-									this.errors.add(localIDnotfound);
-									errores++;
-								} 	
-							}
+									String local_id_not_found = "El atributo \"" + i + "\" de la Primary Key \"" + pk.getId() + "\" no esta declarado en la tabla \"" + name + "\" @line: " + ctx.getStop().getLine();
+						        	this.errores.add(local_id_not_found);
+						        	errores++;
+								}		
 						}
-						//Foreign Keys
-						for (Constraint i:fks)
+						// Foreign Keys
+						for (Constraint i: fks)
 						{
-							//Local Ids
+							// Local IDS
 							for (String j: i.getIDS_local())
-							{	
-								if (! attribute_names.contains(j))
+								if (! attrs_names.contains(j))										
 								{
-									String localIDnotfound = "The attribute \""+ j + "\" from the Foreign Key \"" + i.getId()+ "\" is not declared in the table \"" + name + "\" @line: " + ctx.getStop().getLine();
-									this.errors.add(localIDnotfound);
-									errores++;
+									String local_id_not_found = "El atributo \"" + j + "\" de la Foreign Key \"" + i.getId() + "\" no esta declarado en la tabla \"" + name + "\" @line: " + ctx.getStop().getLine();
+						        	this.errores.add(local_id_not_found);
+						        	errores++;
 								}
-							}
-							//Ref IDS
-							if (!this.getCurrent().existTable(i.getId_ref()))
+							// Ref IDS
+							// Buscar que exista una tabla con el nombre al que se hace referencia
+							if (! this.getCurrent().existTable(i.getId_ref()))
 							{
-								String table_not_found = "The table \""+ i.getId_ref() +"\" that references the Foreign Key \"" +i.getId() + "\" is not declared in the database \"" + this.getCurrent().getName()+"\" @line: " + ctx.getStop().getLine();
-								this.errors.add(table_not_found);
-								errores++;
+								String table_not_found = "La tabla \"" + i.getId_ref() + "\" que hace referencia la Foreign Key \"" + i.getId() + "\" no esta declarada en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+					        	this.errores.add(table_not_found);
+					        	errores++;
 							}
 							else
 							{
 								Table table_ref = this.getCurrent().getTable(i.getId_ref());
-								// Verify that RefIDS belong to the table
+								// Verificar que los RefIDS pertenezcan a la tabla
 								for (String j: i.getIDS_refs())
-								{
-									if(!table_ref.hasAttribute(j))
+									if (! table_ref.hasAttribute(j))
 									{
-										String ref_id_not_found = "The attribute \"" + j + "\" is not declared in the table \"" + i.getId_ref() + "\" that references the Foreign Key \"" + i.getId() + "\" @line: "+ ctx.getStop().getLine();
-										this.errors.add(ref_id_not_found);
-										errores++;
+										String ref_id_not_found = "El atributo \"" + j + "\" no esta declarado en la tabla \"" + i.getId_ref() + "\" que hace referencia la Foreign Key \"" + i.getId() + "\" @line: " + ctx.getStop().getLine();
+							        	this.errores.add(ref_id_not_found);
+							        	errores++;
 									}
-								}
 							}
 						}
-						//Check
-						table = new Table();
-						table.setattributes(atr);
+						// Check
+						
+						//se crea tableuse para visitar el check
+						table_use = new Table();
+						table_use.setattributes(atrs);
 						
 						for (Constraint i: checks)
 						{
-						//Local IDs
-							//Analyzes the checks by creating an input stream
+							// Local IDS
+							//sqlParser.ConditionContext parse = new sqlParser.ConditionContext("string");
 							ANTLRInputStream input = new ANTLRInputStream(i.getCondition());
 							sqlLexer lexer = new sqlLexer(input);
-							CommonTokenStream tokens = new CommonTokenStream(lexer);
-							sqlParser parser = new sqlParser(tokens);
-							ParseTree tree = parser.condition();
+					        
+					        CommonTokenStream tokens = new CommonTokenStream(lexer);
+					
+					        sqlParser parser = new sqlParser(tokens);
+					        
+					        ParseTree tree = parser.condition();					        
+					        
 							Object obj = (Object) visit(tree);
 							
-							if (obj == null)
-							{
-								String chk = "Check: " + i.getId() + "not correctly defined @line: " + ctx.getStop().getLine();
-								this.errors.add(chk);
-								errores++;
+							if (obj == null){
+								String check_ = "Check: " + i.getId() + " mal definido @line: " + ctx.getStop().getLine();
+					        	this.errores.add(check_);
+					        	errores++;
 							}
 						}
-						// Creates table when thorougly validated
+						// Si no hay errores se guarda la tabla
 						if (errores == 0)
-						{
-							
-							Table newTab = new Table(name,atr,pks,fks,checks);
-							for(Constraint i: fks)
-							{
+						{			
+							Table new_table = new Table(name, atrs, pks, fks, checks);
+							// Agregar referencias de las Foreign Key
+							for (Constraint i: fks)
 								this.getCurrent().addRef(i.getId_ref());
-							}
-							this.getCurrent().addTable(newTab);
-							System.out.println("Table \"" +name+"\" successfully aded to the DataBase \"" + this.getCurrent().getName()+ "\"");
-							this.messages.add("Table \"" +name+"\" successfully aded to the DataBase \"" + this.getCurrent().getName()+ "\"");
-							
-							saveTable(this.getCurrent().getName(), newTab, name);					
+							// Agregar tabla a la DB
+							this.getCurrent().addTable(new_table);
+							System.out.println("Tabla \"" + name + "\" agregada exitosamente a la Base de Datos \"" + this.getCurrent().getName() + "\"");
+							this.messages.add("Tabla \"" + name + "\" agregada exitosamente a la Base de Datos \"" + this.getCurrent().getName() + "\"");
+							// Guardar tabla en directorio
+							saveTable(this.getCurrent().getName(), name, new_table);
+							// Guardar cambio en la DB
+							//guardarDBs();
 						}
 					}
 				}
 			}
 			else
-			{
-				String table_existent = "A table with the same name already exists in the DataBase \"" +this.getCurrent().getName() +"\" @line: " +ctx.getStop().getLine();
-				this.errors.add(table_existent);
+			{				
+				String table_already_exist = "Ya existe una tabla con el mismo nombre en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+	        	this.errores.add(table_already_exist);
 			}
-		}	
-		return(T)"";
-	}	
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitColumn_literal(generatedsources.sqlParser.Column_literalContext)
-	 */
-	@Override
-	public Object visitColumn_literal(sqlParser.Column_literalContext ctx){
-		Attribute attr = (Attribute) this.visit(ctx.tipo_literal());
-		attr.setId(ctx.ID().getText());
-		
-		return (T)attr;
+		}
+		return (T)"";
+		//return super.visitTable_definition(ctx);
 	}
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitColumn_constraint(generatedsources.sqlParser.Column_constraintContext)
+	 * @see sqlBaseVisitor#visitColumn_literal(sqlParser.Column_literalContext)
 	 */
 	@Override
-	public Object visitColumn_constraint(sqlParser.Column_constraintContext ctx){
-		Constraint constr = (Constraint) this.visit(ctx.constraint());
-		return (T)constr;
+	public Object visitColumn_literal(sqlParser.Column_literalContext ctx) {
+		// TODO Auto-generated method stub
+		// Obtener tipo del atributo
+		Attribute atr = (Attribute) this.visit(ctx.tipo_literal());
+		// Establecer ID del atributo
+		atr.setId(ctx.ID().getText());
+		return (T) atr;
+		//return super.visitColumn_literal(ctx);
 	}
-	
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitConstraint(generatedsources.sqlParser.ConstraintContext)
+	 * @see sqlBaseVisitor#visitColumn_constraint(sqlParser.Column_constraintContext)
 	 */
 	@Override
-	public Object visitConstraint(sqlParser.ConstraintContext ctx){
-		Constraint constr = (Constraint) this.visit(ctx.constraintType());
-		return (T)constr;
+	public Object visitColumn_constraint(sqlParser.Column_constraintContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint con = (Constraint) this.visit(ctx.constraint());
+		return (T)con;
+		//return super.visitColumn_constraint(ctx);
 	}
-	
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitConstraint(sqlParser.ConstraintContext)
+	 */
+	@Override
+	public Object visitConstraint(sqlParser.ConstraintContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint con = (Constraint) this.visit(ctx.constraintType());
+		return (T)con;
+		//return super.visitConstraint(ctx);
+	}
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitLocalIDS(sqlParser.LocalIDSContext)
 	 */
@@ -869,8 +711,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			ids.addAll((ArrayList<String>) this.visit(ctx.localIDS()));
 		}
 		return (T)ids;
+		//return super.visitLocalIDS(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitRefIDS(sqlParser.RefIDSContext)
 	 */
@@ -886,7 +728,6 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return (T)ids;
 		//return super.visitRefIDS(ctx);
 	}
-
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitIdRef(sqlParser.IdRefContext)
 	 */
@@ -896,7 +737,6 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return (T)ctx.ID().getText();
 		//return super.visitIdRef(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitConstraintTypeForeignKey(sqlParser.ConstraintTypeForeignKeyContext)
 	 */
@@ -908,8 +748,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		const_pk.setIDS_refs((ArrayList<String>)this.visit(ctx.refIDS()));
 		const_pk.setId_ref((String)this.visit(ctx.idRef()));
 		return (T)const_pk;
+		//return super.visitConstraintTypeForeignKey(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitConstraintTypePrimaryKey(sqlParser.ConstraintTypePrimaryKeyContext)
 	 */
@@ -918,31 +758,35 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		// TODO Auto-generated method stub
 		Constraint const_pk = new Constraint(ctx.getChild(0).getText(), "Primary Key");
 		const_pk.setIDS_local((ArrayList<String>)this.visit(ctx.localIDS()));
-		return (T)const_pk;
-	}
-	
-	
-	
-	
-	/**
-	 * VISITOR LOGIC: CHECKS
-	 */
-	public Object visitCompCheck(sqlParser.CompContext ctx){
-		if (ctx instanceof sqlParser.CompIdContext){//tiene los dos ids
-			ArrayList<String> ids = new ArrayList();
-			ids.add((String)visit(ctx.getChild(0)));
-			if (ctx.getChild(2) instanceof sqlParser.NIDContext){
-				ids.add((String)visit(ctx.getChild(2)));
+		/*
+		for(int i = 4; i < ctx.getChildCount()-2; i++)
+		{
+			String child_text = ctx.getChild(i).getText();
+			if (! child_text.equals(","))
+			{
+				const_pk.addLocalID(child_text);
 			}
-			return ids;
-		}else if (ctx instanceof sqlParser.CompLitIdContext){
-			ArrayList<String> ids = new ArrayList();
-			ids.add((String)visit(ctx.getChild(2)));
-			return ids;
-		}
-		return new ArrayList<String>();
+		}*/
+		return (T)const_pk;
+		//return super.visitConstraintTypePrimaryKey(ctx);
 	}
-
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext)
+	 */
+	@Override
+	public Object visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext ctx) {
+		// TODO Auto-generated method stub
+		Constraint const_check = new Constraint(ctx.getChild(0).getText(), "Check");
+		const_check.setCondition(ctx.condition().getText());//asignamos condition al check
+		//System.out.println(ctx.condition().getText());
+		ArrayList<String> ids = (ArrayList<String>)visitConditionCheck(ctx.condition());
+		LinkedHashSet<String> ids_noRepetidos = new LinkedHashSet(ids);
+		ids = new ArrayList(ids_noRepetidos);
+		const_check.setIDS_local(ids);
+		
+		return (T)const_check;
+		//return super.visitConstraintTypeCheck(ctx);
+	}	
 	public Object visitConditionCheck(sqlParser.ConditionContext ctx){
         
 		if (ctx instanceof sqlParser.ConditionCondContext){
@@ -965,42 +809,39 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		
 		return visitConditionCheck((sqlParser.ConditionContext)ctx.getChild(1));// es not_logic condition
 	}
-	
-	
+	public Object visitCompCheck(sqlParser.CompContext ctx){
+		if (ctx instanceof sqlParser.CompIdContext){//tiene los dos ids
+			ArrayList<String> ids = new ArrayList();
+			ids.add((String)visit(ctx.getChild(0)));
+			if (ctx.getChild(2) instanceof sqlParser.NIDContext){
+				ids.add((String)visit(ctx.getChild(2)));
+			}
+			return ids;
+		}else if (ctx instanceof sqlParser.CompLitIdContext){
+			ArrayList<String> ids = new ArrayList();
+			ids.add((String)visit(ctx.getChild(2)));
+			return ids;
+		}
+		return new ArrayList<String>();
+	}
 	/* (non-Javadoc)
-	 * @see sqlBaseVisitor#visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext)
+	 * @see sqlBaseVisitor#visitExp_relational(sqlParser.Exp_relationalContext)
 	 */
 	@Override
-	public Object visitConstraintTypeCheck(sqlParser.ConstraintTypeCheckContext ctx) {
+	public Object visitExp_relational(sqlParser.Exp_relationalContext ctx) {
 		// TODO Auto-generated method stub
-		Constraint const_check = new Constraint(ctx.getChild(0).getText(), "Check");
-		const_check.setCondition(ctx.condition().getText());
-		ArrayList<String> ids = (ArrayList<String>)visitConditionCheck(ctx.condition());
-		LinkedHashSet<String> ids_noRepetidos = new LinkedHashSet(ids);
-		ids = new ArrayList(ids_noRepetidos);
-		const_check.setIDS_local(ids);
-		
-		return (T)const_check;
-		//return super.visitConstraintTypeCheck(ctx);
+		return (T)ctx.getText();
+		//return super.visitExp_relational(ctx);
 	}
-	
-	///////////////////////////////////////////////
-	///////////////////////////////////////////////
-	/////////////END OF CHECKS
-	///////////////////////////////////////////////
-	//////////////////////////////////////////////
-	/**
-	 * VISITOR LOGIC: LOGICAL STATEMENTS
-	 */
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitExp_logic(generatedsources.sqlParser.Exp_logicContext)
+	 * @see sqlBaseVisitor#visitExp_logic(sqlParser.Exp_logicContext)
 	 */
 	@Override
 	public Object visitExp_logic(sqlParser.Exp_logicContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)this.visit(ctx.logic());
+		//return super.visitExp_logic(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitLogic_and(sqlParser.Logic_andContext)
 	 */
@@ -1008,8 +849,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitLogic_and(sqlParser.Logic_andContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)"AND";
+		//return super.visitLogic_and(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitLogic_not(sqlParser.Logic_notContext)
 	 */
@@ -1017,8 +858,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitLogic_not(sqlParser.Logic_notContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)"NOT";
+		//return super.visitLogic_not(ctx);
 	}
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitLogic_or(sqlParser.Logic_orContext)
 	 */
@@ -1026,19 +867,17 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitLogic_or(sqlParser.Logic_orContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)"OR";
+		//return super.visitLogic_or(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: ATTRIBUTE TYPE
-	 */
-	
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitTipo_lit_date(sqlParser.Tipo_lit_dateContext)
 	 */
 	@Override
 	public Object visitTipo_lit_date(sqlParser.Tipo_lit_dateContext ctx) {
 		// TODO Auto-generated method stub
-		Attribute date_attr = new Attribute("", "date");
-		return (T) date_attr;
+		Attribute date_atr = new Attribute("", "date");
+		return (T) date_atr;
+		//return super.visitTipo_lit_date(ctx);
 	}
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitTipo_lit_char(sqlParser.Tipo_lit_charContext)
@@ -1046,8 +885,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	@Override
 	public Object visitTipo_lit_char(sqlParser.Tipo_lit_charContext ctx) {
 		// TODO Auto-generated method stub		
-		Attribute char_attr = new Attribute("", "char", Integer.valueOf(ctx.INT().getText()));
-		return (T) char_attr;
+		Attribute char_atr = new Attribute("", "char", Integer.valueOf(ctx.INT().getText()));
+		return (T) char_atr;
+		//return super.visitTipo_lit_char(ctx);
 	}
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitTipo_lit_float(sqlParser.Tipo_lit_floatContext)
@@ -1059,7 +899,6 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return (T) float_atr;
 		//return super.visitTipo_lit_float(ctx);
 	}
-
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitTipo_lit_int(sqlParser.Tipo_lit_intContext)
 	 */
@@ -1070,446 +909,484 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return (T) int_atr;
 		//return super.visitTipo_lit_int(ctx);
 	}	
-	/**
-	 * VISITOR LOGIC: ALTER TABLE ADD COLUMN
-	 */
-
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitAlterAddColumn(generatedsources.sqlParser.AlterAddColumnContext)
+	 * @see sqlBaseVisitor#visitAlterAddColumn(sqlParser.AlterAddColumnContext)
 	 */
 	@Override
-	public Object visitAlterAddColumn(sqlParser.AlterAddColumnContext ctx){
-		String tabID = (String) this.visit(ctx.idTable());
-		String colID = (String) this.visit(ctx.idColumn());
-		
-		// Verifies used database
-		if(this.getCurrent().getName().isEmpty())
+	public Object visitAlterAddColumn(sqlParser.AlterAddColumnContext ctx) {
+		// TODO Auto-generated method stub
+		String ID_Table = (String) this.visit(ctx.idTable());
+		String ID_Column = (String) this.visit(ctx.idColumn());
+		// Verificar que haya un DB en uso
+		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{
-			//Verifies table exists
-			if (this.getCurrent().existTable(tabID))
+			// Verificar que exista la tabla
+			if (this.getCurrent().existTable(ID_Table))
 			{
-				Table mod = this.getCurrent().getTable(tabID);
-				ArrayList<String> attr_names = mod.getattributesNames();
-				Attribute attr = (Attribute) this.visit(ctx.tipo_literal());
-				attr.setId(colID);
-				boolean insertAttr = mod.canAddAttribute(attr);
-				//if constraint aint null
+				Table toAlter = this.getCurrent().getTable(ID_Table);
+				ArrayList<String> attrs_names = toAlter.getattributesNames();
+				// Obtener tipo del atributo
+				Attribute atr = (Attribute) this.visit(ctx.tipo_literal());
+				// Establecer ID del atributo
+				atr.setId(ID_Column);
+				boolean insertAtr = toAlter.canAddAttribute(atr);
+				// Verificar si hay Constraint
 				if (ctx.constraint() != null)
 				{
-					//gets the constraint
-					Constraint constr = (Constraint) this.visit(ctx.constraint());
-					boolean  insertConstr = mod.canAddConstraint(constr);
+					// Obtener constraint
+					Constraint con = (Constraint) this.visit(ctx.constraint());					
+					boolean insertConst = toAlter.canAddConstraint(con);
 					
-					//Verifies both 
-					if (insertAttr && insertConstr)
-					{
-						//Validation
+					// Verificar que se puedan agregar ambos valores
+					if ( insertAtr && insertConst)
+					{					
+						// Verificar errores de la constraint
 						int errores = 0;
-						//Local IDS belong to the table
-						ArrayList<String> ids = constr.getIDS_local();
+						
+						// Local IDS pertenecen a la tabla
+						ArrayList<String> ids = con.getIDS_local();						
 						for (String i: ids)
-						{
-							if(!attr_names.contains(i))
+							if (! attrs_names.contains(i))
 							{
-								if (! i.equals(colID))
+								// Verificar que no sea el caso del Attribute recien declarado
+								if (! i.equals(ID_Column))
 								{
-									String local_id_not_found = "The attribute \""+ i+ "\" from the " + constr.gettype() + " \""+ constr.getId() + "\" is not declared in table \"" + mod.getName() + "\" @line: " + ctx.getStop().getLine();
-									this.errors.add(local_id_not_found);
-									errores++;
+									String local_id_not_found = "El atributo \"" + i + "\" de la " + con.gettype() +" \"" + con.getId() + "\" no esta declarado en la tabla \"" + toAlter.getName() + "\" @line: " + ctx.getStop().getLine();
+						        	this.errores.add(local_id_not_found);
+						        	errores++;
 								}
 							}
-						}
-						switch (constr.gettype())
+						
+						switch (con.gettype())
 						{
-						case "Primary Key":
-							if(! mod.getPrimaryKeys().isEmpty())
-							{
-								String multiplePk = "A table cant have more than one Primary Key @line "+ ctx.getStop().getLine();
-								this.errors.add(multiplePk);
-								errores++;
-							}
-							break;
-						case "Foreign Key":
-							if (!this.getCurrent().existTable(constr.getId_ref()))
-							{
-								String table_not_found = "The table \"" + constr.getId_ref() + "\" that references the Foreign Key \"" +constr.getId() + "\" is not declared @line" + ctx.getStop().getLine();
-								this.errors.add(table_not_found);
-								errores++;
-							}
-							else
-							{
-								Table table_ref = this.getCurrent().getTable(constr.getId_ref());
-								for (String j: constr.getIDS_refs())
+							case "Primary Key":
+								// Solo puede haber una PK
+								if (! toAlter.getPrimaryKeys().isEmpty())
 								{
-									if (! table_ref.hasAttribute(j))
+									String more_than_one_pk = "Una tabla no puede tener declarada mas de una Primary Key @line: " + ctx.getStop().getLine();
+						        	this.errores.add(more_than_one_pk);
+									errores++;								
+								}							
+								break;
+							case "Foreign Key":
+								// Ref IDS
+								// Buscar que exista una tabla con el nombre al que se hace referencia
+								if (! this.getCurrent().existTable(con.getId_ref()))
+								{
+									String table_not_found = "La tabla \"" + con.getId_ref() + "\" que hace referencia la Foreign Key \"" + con.getId() + "\" no esta declarada en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+						        	this.errores.add(table_not_found);
+						        	errores++;
+								}
+								else
+								{
+									Table table_ref = this.getCurrent().getTable(con.getId_ref());
+									// Verificar que los RefIDS pertenezcan a la tabla
+									for (String j: con.getIDS_refs())
+										if (! table_ref.hasAttribute(j))
+										{
+											String ref_id_not_found = "El atributo \"" + j + "\" no esta declarado en la tabla \"" + con.getId_ref() + "\" que hace referencia la Foreign Key \"" + con.getId() + "\" @line: " + ctx.getStop().getLine();
+								        	this.errores.add(ref_id_not_found);
+								        	errores++;
+										}
+								}
+								break;
+							case "Check":
+								table_use = new Table(toAlter);//seteo table_use como la de eval check
+								table_use.getattributes().add(atr);
+								table_use.setData(new ArrayList<ArrayList<String>>());//la vacio para que sea rapido
+								
+								ANTLRInputStream input = new ANTLRInputStream(con.getCondition());
+								sqlLexer lexer = new sqlLexer(input);
+								CommonTokenStream tokens = new CommonTokenStream(lexer);
+								sqlParser parser = new sqlParser(tokens);
+								ParseTree tree = parser.condition();
+								
+								Object obj = (Object) visit(tree);
+								if (obj == null){
+									String check_ = "Check: " + con.getId() + " mal definido @line: " + ctx.getStop().getLine();
+						        	this.errores.add(check_);
+						        	errores++;
+								}
+								
+								break;
+						}
+						
+						if (errores == 0)
+						{
+							// Agregar atributo
+							toAlter.addAttribute(atr);
+							// Agregar constraint
+							toAlter.addConstraint(con);					
+							// Agrega la referencia si es Foreign Key
+							if (con.gettype().equals("Foreign Key"))
+								this.getCurrent().addRef(con.getId_ref());
+							System.out.println("Columna \"" + ID_Column + "\" y Constraint \"" + con.getId() + "\" agregadas exitosamente a la tabla \"" + toAlter.getName() + "\"");
+							this.messages.add("Columna \"" + ID_Column + "\" y Constraint \"" + con.getId() + "\" agregadas exitosamente a la tabla \"" + toAlter.getName() + "\"");
+						}
+					}
+					else
+					{
+						// Reportar errores
+						if (! insertAtr)
+						{
+							String column_repeated = "No se puede agregar la columna \"" + ID_Column + "\" porque existe otra con el mismo nombre @line: " + ctx.getStop().getLine();
+							this.errores.add(column_repeated);
+						}
+						if (! insertConst)
+						{
+							String constraint_repeated = "No se puede agregar la constraint \"" + con.getId() + "\" porque existe otra con el mismo nombre @line: " + ctx.getStop().getLine();
+							this.errores.add(constraint_repeated);
+						}
+					}
+				}
+				// Si no hay Constraint
+				else
+				{
+					if (insertAtr)
+					{
+						// Agregar atributo
+						toAlter.addAttribute(atr);						
+						System.out.println("Columna \"" + ID_Column + "\" agregada exitosamente a la tabla \"" + toAlter.getName() + "\"");
+						this.messages.add("Columna \"" + ID_Column + "\" agregada exitosamente a la tabla \"" + toAlter.getName() + "\"");
+					}
+					else
+					{
+						String column_repeated = "No se puede agregar la columna \"" + ID_Column + "\" porque existe otra con el mismo nombre @line: " + ctx.getStop().getLine();
+						this.errores.add(column_repeated);
+					}
+				}
+			}
+			else
+			{
+				String table_not_found = "La Tabla \"" + ID_Table + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+				this.errores.add(table_not_found);
+			}
+		}
+		return (T)"";
+		//return super.visitAlterAddColumn(ctx);
+	}
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitAlterAddConstraint(sqlParser.AlterAddConstraintContext)
+	 */
+	@Override
+	public Object visitAlterAddConstraint(sqlParser.AlterAddConstraintContext ctx) {
+		// TODO Auto-generated method stub
+		String ID_Table = (String) this.visit(ctx.idTable());
+		// Verificar que haya un DB en uso
+		if (this.getCurrent().getName().isEmpty())
+		{
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
+		}
+		else
+		{
+			
+			// Verificar que exista la tabla
+			if (this.getCurrent().existTable(ID_Table))
+			{
+				Table toAlter = this.getCurrent().getTable(ID_Table);
+				ArrayList<String> attrs_names = toAlter.getattributesNames();				
+				
+				
+				// Obtener constraint
+				Constraint con = (Constraint) this.visit(ctx.constraint());
+				//System.out.println("esto aqui 0");
+				boolean insertConst = toAlter.canAddConstraint(con);
+				
+				// Verificar que se puedan agregar la constraint
+				if (insertConst)
+				{					
+					// Verificar errores de la constraint
+					int errores = 0;
+					
+					// Local IDS pertenecen a la tabla
+					ArrayList<String> ids = con.getIDS_local();								
+					for (String i: ids)
+						if (! attrs_names.contains(i))
+						{
+							String local_id_not_found = "El atributo \"" + i + "\" de la " + con.gettype() +"\"" + con.getId() + "\" no esta declarado en la tabla \"" + toAlter.getName() + "\" @line: " + ctx.getStop().getLine();
+				        	this.errores.add(local_id_not_found);
+				        	errores++;
+						}
+					
+					switch (con.gettype())
+					{
+						case "Primary Key":
+							// Solo puede haber una PK
+							if (! toAlter.getPrimaryKeys().isEmpty())
+							{
+								String more_than_one_pk = "Una tabla no puede tener declarada mas de una Primary Key @line: " + ctx.getStop().getLine();
+					        	this.errores.add(more_than_one_pk);
+								errores++;								
+							}
+							if (errores == 0)
+							{
+								// Revisar Data en la tabla
+								for (String i: con.getIDS_local())
+								{
+									int n_nulls = 0;
+									int index_data_atr = toAlter.getattributesNames().indexOf(i);
+									for (String data_i: toAlter.dataColumnI(index_data_atr))
+										if (data_i.toLowerCase().equals("null"))
+											n_nulls++;
+									if (n_nulls > 0)
 									{
-										String ref_if_not_found = "The attribute \"" + j + "\" is not declared in Table \"" + constr.getId_ref() + "\" that references Foreign Key \"" + constr.getId() + "\" @line: " + ctx.getStop().getLine();
-										this.errors.add(ref_if_not_found);
-										errores++;
+										String pk_cant_have_null = "No se puede agregar la Primary Key \"" + con.getId() + "\" porque el Attribute \"" + i + "\" tiene " + n_nulls + " valores nulos @line: " + ctx.getStop().getLine();
+										this.errores.add(pk_cant_have_null);
 									}
 								}
 							}
 							break;
-						case "Check":
-							table = new Table(mod);
-							table.setData(new ArrayList<ArrayList<String>>());
+						case "Foreign Key":
+							// Ref IDS
+							// Buscar que exista una tabla con el nombre al que se hace referencia
+							if (! this.getCurrent().existTable(con.getId_ref()))
+							{
+								String table_not_found = "La tabla \"" + con.getId_ref() + "\" que hace referencia la Foreign Key \"" + con.getId() + "\" no esta declarada en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+					        	this.errores.add(table_not_found);
+					        	errores++;
+							}
+							else
+							{
+								Table table_ref = this.getCurrent().getTable(con.getId_ref());
+								// Verificar que los RefIDS pertenezcan a la tabla
+								for (String j: con.getIDS_refs())
+									if (! table_ref.hasAttribute(j))
+									{
+										String ref_id_not_found = "El atributo \"" + j + "\" no esta declarado en la tabla \"" + con.getId_ref() + "\" que hace referencia la Foreign Key \"" + con.getId() + "\" @line: " + ctx.getStop().getLine();
+							        	this.errores.add(ref_id_not_found);
+							        	errores++;
+									}
+							}
+							break;
+						case "Check":;
+						
+							//System.out.println("esto aqui1");
+							table_use = new Table(toAlter);//seteo table_use como la de eval check
+							table_use.setData(new ArrayList<ArrayList<String>>());//la vacio para que sea rapido
 							
-							ANTLRInputStream input = new ANTLRInputStream(constr.getCondition());
+							ANTLRInputStream input = new ANTLRInputStream(con.getCondition());
 							sqlLexer lexer = new sqlLexer(input);
 							CommonTokenStream tokens = new CommonTokenStream(lexer);
 							sqlParser parser = new sqlParser(tokens);
 							ParseTree tree = parser.condition();
 							
+							//System.out.println(tree.getText());
+							
 							Object obj = (Object) visit(tree);
-							if (obj == null)
-							{
-								String check_ = "Check: " + constr.getId()+ " not defined correctly @line: " + ctx.getStop().getLine();
-								this.errors.add(check_);
-								errores++;
+							//System.out.println(obj);
+							if (obj == null){
+								String check_ = "Check: " + con.getId() + "mal definido @line: " + ctx.getStop().getLine();
+					        	this.errores.add(check_);
+					        	errores++;
 							}
 							break;
 						}
+					
 						if (errores == 0)
 						{
-							mod.addConstraint(constr);
-							if (constr.gettype().equals("Foreign Key"))
-							{
-								this.getCurrent().addRef(constr.getId_ref());			
-							}
-							System.out.println("Constraint \"" + constr.getId() + "\" added succesfully to the table \"" + mod.getName()+"\"");
-							this.messages.add("Constraint \"" + constr.getId() + "\" added succesfully to the table \"" + mod.getName() + "\"");
-						}
-					}
-					else
-					{
-						//Report errors
-						if (!insertAttr)
-						{
-							String column_repeated ="Column can't be added \"" + colID+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
-							this.errors.add(column_repeated);
-						}
-						if (! insertConstr)
-						{
-							String constraint_repeated = "Constraint can't be added \"" + constr.getId()+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
-							this.errors.add(constraint_repeated);
-							
-						}
-					}
-				}
-				else
-				{
-					if (insertAttr)
-					{
-						mod.addAttribute(attr);
-						System.out.println("Column \"" + colID + "\" added succesfully to the table \"" + mod.getName()+"\"");
-						this.messages.add("Column \"" + colID + "\" added succesfully to the table \"" + mod.getName() + "\"");
-					}
-					else
-					{
-						String column_repeated ="Column can't be added \"" + colID+ "\" because one with the same name already exists @line: "+ctx.getStop().getLine();
-						this.errors.add(column_repeated);
-					}
-				}
-			}
-			else
-			{			
-				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
-				this.errors.add(table_not_found);
-					
-			}
-		}
-		return (T)"";
-	}
-	/**
-	 * VISITOR LOGIC: ALTER TABLE ADD CONSTRAINT
-	 */
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitAlterAddConstraint(generatedsources.sqlParser.AlterAddConstraintContext)
-	 */
-	@Override
-	public Object visitAlterAddConstraint(sqlParser.AlterAddConstraintContext ctx){
-		String tabID =(String) this.visit(ctx.idTable());
-		if (this.getCurrent().getName().isEmpty())
-		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
-		}
-		else
-		{
-			//Check if table exists
-			if (this.getCurrent().existTable(tabID))
-			{
-				Table mod = this.getCurrent().getTable(tabID);
-				ArrayList<String> attr_names = mod.getattributesNames();
-				
-				//Get constraint
-				Constraint con = (Constraint) this.visit(ctx.constraint());
-				boolean insertConstraint = mod.canAddConstraint(con);
-				//Check if constraint can be added 
-				if (insertConstraint)
-				{
-					//Check for constraint errors
-					int errores = 0;
-					
-					//Local Ids belong to table
-					ArrayList<String> ids = con.getIDS_local();
-					for (String i: ids)
-						if(!attr_names.contains(i))
-						{
-							String local_id_not_found = "The attribute \""+ i+ "\" from the " +con.gettype() + "\""+con.getId() + "\" is not declared in the table \"" + mod.getName() + "\" @line: " + ctx.getStop().getLine();
-							this.errors.add(local_id_not_found);
-							errores++;
-						}
-					switch (con.gettype())
-					{
-					case "Primary Key":
-						if (! mod.getPrimaryKeys().isEmpty())
-						{
-							String multiplePk = "A table cant have more than one Primary Key @line "+ ctx.getStop().getLine();
-							this.errors.add(multiplePk);
-							errores++;
-						}
-						if (errores == 0)
-						{
-							for (String i: con.getIDS_local())
-							{
-								int nullCount = 0;
-								int index_data_attr = mod.getattributesNames().indexOf(i);
-								for (String data_i: mod.dataColumnI(index_data_attr))
-									if (data_i.toLowerCase().equals("null"))
-										nullCount++;
-								if (nullCount > 0)
-								{
-									String pkNotNull = "Primary Key \""+ con.getId() +"\" can't be added because the Attribute \"" + i + "\" has " + nullCount+ " null values @line: " +ctx.getStop().getLine();
-									this.errors.add(pkNotNull);
-								}
-							}
-						}
-						break;
-					case "Foreign Key":
-						//Referenced IDS
-						if (!this.getCurrent().existTable(con.getId_ref()))
-						{
-							String tabNotFound = "The table \"" + con.getId_ref() + "\" referenced by the Foreign Key \"" + con.getId() + "\" is not declared in the DataBase \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
-							this.errors.add(tabNotFound);
-							errores++;
-						}
-						else 
-						{
-							Table refTab = this.getCurrent().getTable(con.getId_ref());
-							for (String j: con.getIDS_refs())
-								if(!refTab.hasAttribute(j))
-								{
-									String refID_notfound = "The attribute \"" + j + "\" is not daclared in the table \"" +con.getId_ref()+ "\" that references the Foreign Key \"" + con.getId() + "\" @line: " + ctx.getStop().getLine();
-									this.errors.add(refID_notfound);
-									errores++;
-								}
-						}
-						break;
-					case "Check":
-						table = new Table(mod);
-						table.setData(new ArrayList<ArrayList<String>>());
-						
-						//Configure the antlr Input Stream and tokens
-						ANTLRInputStream input = new ANTLRInputStream(con.getCondition());
-						sqlLexer lexer = new sqlLexer(input);
-						CommonTokenStream tokens = new CommonTokenStream(lexer);
-						sqlParser parser = new sqlParser(tokens);
-						ParseTree tree = parser.condition();
-						
-						Object obj = (Object) visit(tree);
-						if (obj == null)
-						{
-							String check_ = "Check: " + con.getId() +"Not defined correctly @line: " + ctx.getStop().getLine();
-							this.errors.add(check_);
-							errores++;
-						}
-						break;
-					}
-					
-					if (errores == 0)
-					{
-						//Adds constraint
-						mod.addConstraint(con);
+						// Agregar constraint
+						toAlter.addConstraint(con);					
+						// Agrega la referencia si es Foreign Key
 						if (con.gettype().equals("Foreign Key"))
 							this.getCurrent().addRef(con.getId_ref());
-						System.out.println("Constraint \"" + con.getId() + "\" added succesfully to the table \"" + mod.getName()+"\"");
-						this.messages.add("Constraint \"" + con.getId() + "\" added succesfully to the table \"" + mod.getName() + "\"");
+						System.out.println("Constraint \"" + con.getId() + "\" agregada exitosamente a la tabla \"" + toAlter.getName() + "\"");
+						this.messages.add("Constraint \"" + con.getId() + "\" agregada exitosamente a la tabla \"" + toAlter.getName() + "\"");
 					}
 				}
 				else
 				{
-					if (!insertConstraint)
+					// Reportar errores
+					if (! insertConst)
 					{
-						String constraint_repeated = "Can't add constraint \"" + con.getId() + "\" because one with the same name already exists @line: " +ctx.getStop().getLine();
-						this.errors.add(constraint_repeated);
+						String constraint_repeated = "No se puede agregar la constraint \"" + con.getId() + "\" porque existe otra con el mismo nombre @line: " + ctx.getStop().getLine();
+						this.errores.add(constraint_repeated);
 					}
-				}
+				}				
 			}
 			else
 			{
-				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
-				this.errors.add(table_not_found);
+				String table_not_found = "La Tabla \"" + ID_Table + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+				this.errores.add(table_not_found);
 			}
-		}	
+		}
 		return (T)"";
+
+		//return super.visitAlterAddConstraint(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: ALTER TABLE DROP COLUMN
-	 */
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitAlterDropColumn(generatedsources.sqlParser.AlterDropColumnContext)
+	 * @see sqlBaseVisitor#visitAlterDropColumn(sqlParser.AlterDropColumnContext)
 	 */
 	@Override
-	public Object visitAlterDropColumn(sqlParser.AlterDropColumnContext ctx){
-		String tabID = (String) this.visit(ctx.idTable());
-		String colID = (String) this.visit(ctx.idColumn());
+	public Object visitAlterDropColumn(sqlParser.AlterDropColumnContext ctx) {
+		// TODO Auto-generated method stub
+		String ID_Table = (String) this.visit(ctx.idTable());
+		String ID_Column = (String) this.visit(ctx.idColumn());
+		// Verificar que haya un DB en uso
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{
-			//Verfies if table exists
-			if (this.getCurrent().existTable(tabID))
+			// Verificar que exista la tabla
+			if (this.getCurrent().existTable(ID_Table))
 			{
-				Table mod = this.getCurrent().getTable(tabID);
-				ArrayList<String> attr_names = mod.getattributesNames();
-				if (attr_names.contains(colID))
+				Table toAlter = this.getCurrent().getTable(ID_Table);
+				ArrayList<String> attrs_names = toAlter.getattributesNames();
+				// Verificar que la columna que se quiere borrar pertenezca a la tabla
+				if (attrs_names.contains(ID_Column))
 				{
+					// Verificar errores de referencia
 					int errores = 0;
-					ArrayList<Constraint> pks = mod.getPrimaryKeys();
-					if (!pks.isEmpty())
+					// Pk que lo contiene
+					ArrayList<Constraint> pks = toAlter.getPrimaryKeys();
+					if (! pks.isEmpty())
 					{
 						Constraint pk = pks.get(0);
 						ArrayList<String> locals = pk.getIDS_local();
-						if (locals.contains(colID))
+						if (locals.contains(ID_Column))
 						{
-							int index = locals.indexOf(colID);
+							int index = locals.indexOf(ID_Column);
 							locals.remove(index);
-							this.messages.add("The attribute \"" + colID +"\" has been successfully deleted from the Primary key \"" + pk.getId() +"\"");
+							this.messages.add("El atributo \"" + ID_Column + "\" se ha eliminado exitosamente de la Primary Key \"" + pk.getId() + "\"");
+							/*String delete_pk_first = "La Primary Key \"" + pk.getId() + "\" contiene el atributo \"" + ID_Column + "\" que se quiere eliminar, por lo tanto se debe realizar primero el DROP CONSTRAINT correspondiente @ line: " + ctx.getStop().getLine();
+							this.errores.add(delete_pk_first);
+							errores++;*/
 						}
 					}
-					// Checks
-					ArrayList<Constraint> cks = mod.getChecks();
-					if (cks.isEmpty())
+					// Checks lo contiene
+					ArrayList<Constraint> cks = toAlter.getChecks();
+					if (!cks.isEmpty())
 					{
 						for (Constraint i: cks)
 						{
 							ArrayList<String> locals = i.getIDS_local();
-							if (locals.contains(colID))
+							if (locals.contains(ID_Column))
 							{
-								String delete_check_first = "The Check \"" + i.getId() +"\" contains the attribute \"" + colID + "\". DROP the CONSTRAINT first before deleting the attribute @line: " +ctx.getStop().getLine();
-								this.errors.add(delete_check_first);
-								errores++;
+								String delete_check_first = "El Check \"" + i.getId() + "\" contiene el atributo \"" + ID_Column + "\" que se quiere eliminar, por lo tanto se debe realizar primero el DROP CONSTRAINT correspondiente @ line: " + ctx.getStop().getLine();
+					        	this.errores.add(delete_check_first);
+					        	errores++;
 							}
+							/*String id1 = locals.get(0);
+							String id2 = locals.get(1);
+							if ( (id1.equals(ID_Column)) || (id2.equals(ID_Column)) )
+							{
+								String delete_check_first = "El Check \"" + i.getId() + "\" contiene el atributo \"" + ID_Column + "\" que se quiere eliminar, por lo tanto se debe realizar primero el DROP CONSTRAINT correspondiente @ line: " + ctx.getStop().getLine();
+					        	this.errores.add(delete_check_first);
+					        	errores++;
+							}*/							
 						}
 					}
-					// Referencing FK from other tables
-					if (this.getCurrent().existRef(tabID)){
-						for (Table t: this.getCurrent().getTables())
-							if (! t.getName().equals(tabID))
-								for (Constraint c: t.getForeignKey())
+					// En Ref_IDs de Fk de otras tablas en la misma DB
+					if (this.getCurrent().existRef(ID_Table))
+					{
+						for (Table i: this.getCurrent().getTables())
+							if (! i.getName().equals(ID_Table))
+								for(Constraint j: i.getForeignKey())
 								{
-									ArrayList<String> ref = c.getIDS_refs();
-									if (ref.contains(colID))
+									ArrayList<String> refs = j.getIDS_refs();
+									if (refs.contains(ID_Column))
 									{
-										String delete_fk_first = "The foreing key \""+ c.getId() + "\" from the Table \"" + t.getName() + "\" contains the Attribute \"" + colID + "\" that you are trying to delete. Perform the necesary DROP CONSTRAINT before proceeding. @line: " + ctx.getStop().getLine();
-										this.errors.add(delete_fk_first);
+										String delete_fk_first = "La Foreign Key \"" + j.getId() + "\" de la Tabla \"" + i.getName() + "\" contiene el atributo \"" + ID_Column + "\" que se quiere eliminar, por lo tanto se debe realizar primero el DROP CONSTRAINT correspondiente @ line: " + ctx.getStop().getLine();
+										this.errores.add(delete_fk_first);
 										errores++;
 									}
 								}
 					}
+					// Si no hay errores se procede a borrar la columna
 					if (errores == 0)
 					{
-						mod.deleteAttribute(colID);
-						System.out.println("Attribute \"" + colID + "\" deleted successfully from Table \"" + tabID +"\"");
-						this.messages.add("Attribute \"" + colID + "\" deleted successfully from Table \"" + tabID +"\"");
+						toAlter.deleteAttribute(ID_Column);
+						System.out.println("El atributo \"" + ID_Column + "\" se ha eliminado exitosamente de la Tabla \"" + ID_Table + "\"");
+						this.messages.add("El atributo \"" + ID_Column + "\" se ha eliminado exitosamente de la Tabla \"" + ID_Table + "\"");
 					}
 				}
 				else
 				{
-					String attr_not_found = "Attribute: \"" + colID + "\" does not exist in Table \"" + mod.getName() + "\" @line: " +ctx.getStop().getLine();
-					this.errors.add(attr_not_found);
+					String attr_not_found = "El atributo \"" + ID_Column + "\" no existe en la Tabla \"" + toAlter.getName() + "\" @line: " + ctx.getStop().getLine();
+					this.errores.add(attr_not_found);
 				}
 			}
 			else
 			{
-				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
-				this.errors.add(table_not_found);
+				String table_not_found = "La Tabla \"" + ID_Table + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+				this.errores.add(table_not_found);
 			}
-				
 		}
 		return (T)"";
+		//return super.visitAlterDropColumn(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: ALTER TABLE DROP CONSTRAINT
-	 */
+
 	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitAlterDropConstraint(generatedsources.sqlParser.AlterDropConstraintContext)
+	 * @see sqlBaseVisitor#visitAlterDropConstraint(sqlParser.AlterDropConstraintContext)
 	 */
 	@Override
-	public Object visitAlterDropConstraint(sqlParser.AlterDropConstraintContext ctx){
-		String tabID = (String) this.visit(ctx.idTable());
-		String conID = (String) this.visit(ctx.idConstraint());
+	public Object visitAlterDropConstraint(sqlParser.AlterDropConstraintContext ctx) {
+		// TODO Auto-generated method stub
+		String ID_Table = (String) this.visit(ctx.idTable());
+		String ID_Constraint = (String) this.visit(ctx.idConstraint());
+		// Verificar que haya un DB en uso
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{
-			if (this.getCurrent().existTable(tabID))
+			// Verificar que exista la tabla
+			if (this.getCurrent().existTable(ID_Table))
 			{
-				Table mod = this.getCurrent().getTable(tabID);
-				if (mod.existeConstraint(conID))
+				Table toAlter = this.getCurrent().getTable(ID_Table);
+				// Verificar que exista la Constraint
+				if (toAlter.existeConstraint(ID_Constraint))
 				{
-					Constraint drop = mod.getConstraint(conID);
-					if(drop.gettype().equals("Foreign Key"))
+					// Verificar si hay que borrarlo de constraints_refs
+					Constraint to_drop = toAlter.getConstraint(ID_Constraint);
+					if (to_drop.gettype().equals("Foreign Key"))
 					{
 						int cont = 0;
-						for (Table t: this.getCurrent().getTables())
-							if (!t.getName().equals(tabID))
+						for (Table i: this.getCurrent().getTables())
+							if (! i.getName().equals(ID_Table))
 							{
-								for (Constraint c: t.getForeignKey())
-									if(c.getId_ref().equals(drop.getId_ref()))
+								for (Constraint j: i.getForeignKey())
+									if (j.getId_ref().equals(to_drop.getId_ref()))
 									{
 										cont++;
 										break;
 									}
 							}
 						if (cont == 0)
-							this.getCurrent().deleteRef(drop.getId_ref());
-						
+							this.getCurrent().deleteRef(to_drop.getId_ref());
+								
 					}
-					mod.deleteConstraint(drop);
-					System.out.println("Constraint \"" + conID + "\" deleted successfully from Table \"" + tabID +"\"");
-					this.messages.add("Constraint \"" + conID + "\" deleted successfully from Table \"" + tabID +"\"");
+					// Eliminar constraint
+					toAlter.deleteConstraint(to_drop);
+					System.out.println("La Constraint \"" + ID_Constraint + "\" se ha eliminado exitosamente de la Tabla \"" + ID_Table + "\"");
+					this.messages.add("La Constraint \"" + ID_Constraint + "\" se ha eliminado exitosamente de la Tabla \"" + ID_Table + "\"");
 				}
 				else
 				{
-					String con_not_found = "Consraint: \"" + conID + "\" does not exist in Table \"" + mod.getName() + "\" @line: " +ctx.getStop().getLine();
-					this.errors.add(con_not_found);
+					String const_not_found = "La Constraint \"" + ID_Constraint + "\" no existe en la Tabla \"" + toAlter.getName() + "\" @line: " + ctx.getStop().getLine();
+					this.errores.add(const_not_found);
 				}
 			}
 			else
 			{
-				String table_not_found = "The table \"" + tabID + "\" does not exist in DataBase \""+ this.getCurrent().getName() + "\" @Line: "+ctx.getStop().getLine();
-				this.errors.add(table_not_found);
+				String table_not_found = "La Tabla \"" + ID_Table + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+				this.errores.add(table_not_found);
 			}
 		}
-		return (T)"";	
+		return (T)"";
+		//return super.visitAlterDropConstraint(ctx);
 	}
-	
-	/**
-	 * VISITOR LOGIC: ID TABLE 
-	 */
+
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitIdTable(sqlParser.IdTableContext)
 	 */
@@ -1517,11 +1394,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitIdTable(sqlParser.IdTableContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)ctx.ID().getText();
-		
+		//return super.visitIdTable(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: ID COLUMN
-	 */
+
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitIdColumn(sqlParser.IdColumnContext)
 	 */
@@ -1529,11 +1404,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitIdColumn(sqlParser.IdColumnContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)ctx.ID().getText();
-		
+		//return super.visitIdColumn(ctx);
 	}
-	/**
-	 * VISITOR LOGIC: ID CONSTRAINT
-	 */
+
 	/* (non-Javadoc)
 	 * @see sqlBaseVisitor#visitIdConstraint(sqlParser.IdConstraintContext)
 	 */
@@ -1541,536 +1414,288 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	public Object visitIdConstraint(sqlParser.IdConstraintContext ctx) {
 		// TODO Auto-generated method stub
 		return (T)ctx.ID().getText();
-	}
-	/**
-	 * VISITOR LOGIC: SHOW COLUMN FROM
-	 */
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitShow_column_statement(generatedsources.sqlParser.Show_column_statementContext)
-	 */
-	@Override
-	public T visitShow_column_statement(sqlParser.Show_column_statementContext ctx){
-		//SHOW COLUMNS FROM ID (comprobar use database, id contenido en database)
-		
-		if (this.getCurrent().getName().isEmpty()){
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
-		}else{
-			String ID = ctx.getChild(3).getText();
-			Table tb = getCurrent().getTable(ID);
-			if (tb == null){
-				String no_database_in_use = "There is no Table " +ID+" in the database " +this.getCurrent().getName()+" @line: " + ctx.getStop().getLine();
-	        	this.errors.add(no_database_in_use);
-	        	//System.out.println("error de tabla");
-			}else{
-				return (T)tb;
-			}
-		}
-		
-		return (T)new String();
-	}
-	/**
-	 * VISITOR LOGIC: SHOW SCHEMA
-	 */
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitShow_schema_statement(generatedsources.sqlParser.Show_schema_statementContext)
-	 */
-	@Override
-	public T visitShow_schema_statement(sqlParser.Show_schema_statementContext ctx){
-		return (T)schema;
-	}
-	/**
-	 * VISITOR LOGIC: SHOW TABLES
-	 */
-	@Override
-	public T visitShow_table_statement(sqlParser.Show_table_statementContext ctx){
-		//SHOW TABLES (comprobar use database)
-		if (this.getCurrent().getName().isEmpty()){
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
-		}else{
-			
-			ArrayList<Attribute> atr = new ArrayList();
-			atr.add(new Attribute("Tables"));
-			
-			ArrayList<ArrayList<String>> values = new ArrayList();
-			for (Table tb: getCurrent().getTables()){
-				ArrayList<String> val = new ArrayList();
-				val.add(tb.getName());
-				values.add(val);
-			}
-			Table tb1 = new Table(getCurrent().getName());
-			tb1.setattributes(atr);
-			tb1.setData(values);
-			return (T)tb1;
-		}
-		return (T)new String();
-	}
-	/* (non-Javadoc)
-	 * @see generatedsources.sqlBaseVisitor#visitNID(generatedsources.sqlParser.NIDContext)
-	 */
-	@Override
-	public Object visitNID( sqlParser.NIDContext ctx){
-		if (ctx.getChildCount() <= 1) return ctx.getChild(0).getText();
-	
-		return ctx.getChild(0).getText()+"."+ctx.getChild(2).getText();
-	}
-	
-	public Object visitNlocalIDS (sqlParser.NlocalIDSContext ctx){
-		if (ctx.getChildCount() <= 1){
-			ArrayList<String> ar = new ArrayList();
-			ar.add((String)visitChildren(ctx));
-			return ar;
-		}
-		
-		ArrayList<String> ar = new ArrayList();
-		ar.add((String) visit(ctx.getChild(0)));
-		ar.addAll((ArrayList<String>)visit(ctx.getChild(2)));
-		return ar;		
-	}
-	
-	public Object checkDuplicates (ArrayList<String> tables){
-		LinkedHashSet<String> ntables = new LinkedHashSet(tables);
-		LinkedHashSet<String> dup = new LinkedHashSet();
-		for (String st: ntables){
-			if (dup.contains(st)){
-				return st;
-			}
-			dup.add(st);
-		}
-		return "";
-	}
-	
-	@Override
-	public Object visitLiteral(sqlParser.LiteralContext ctx) {
-		
-		if (ctx.getChild(0).getText().toUpperCase().equals("NULL"))
-			return "NULL";
-		else
-			return this.visit(ctx.getChild(0));
-		
+		//return super.visitIdConstraint(ctx);
 	}
 
-	/****************************
-	 * Recibimos un numero
-	 * Si este contiene un punto
-	 * quitamos todo lo que este despues del punto
-	 ****************************/
-	@Override 
-	public T visitInt_literal(@NotNull sqlParser.Int_literalContext ctx) 
-	{ 
-		String num = ctx.INT().getText();
-		
-		if (num.contains("."))
-		{
-			int index = num.indexOf('.');
-			num = num.substring(0, index);
-		}
-		
-		return (T)"int"; 
-	}
-	
-	
-	/****************************
-	 * Recibimos un numero
-	 * Si este no contiene punto
-	 * le agregamos .0
-	 ****************************/
-	@Override 
-	public T visitFloat_literal(@NotNull sqlParser.Float_literalContext ctx) 
-	{ 
-		String num = ctx.INT(0).getText();
-		
-		if (!num.contains("."))
-		{
-			num += ".0";
-		}
-		
-		return (T)"float"; 
-	}
-	
-	
-	/******************************************
-	 * -MONTH-DAY
-	 * 1<=MONTH<=12
-	 * Validamos el dia segun el mes y el año
-	 *******************************************/
-	@Override 
-	public T visitDate_literal(@NotNull sqlParser.Date_literalContext ctx) 
-	{ 
-		String fecha = ctx.DATE().getText(); 
-		
-		fecha = fecha.replace("'", "");
-		
-		String[] date = fecha.split("-");
-		
-		int year = Integer.parseInt(date[0]);
-		int mes = Integer.parseInt(date[1]);
-		int dia = Integer.parseInt(date[2]);
-		
-		String tipo = "Error";
-		
-		if (1 <= mes && mes<= 12 && dia>=1)
-		{
-			if (leap(year))
-			{
-				if (mes == 2)
-				{
-					if (dia<=29)
-					{
-						tipo = "date";
-					}
-				}
-				else
-				{
-					if (dia<=maxday(mes))
-					{
-						tipo = "date";
-					}
-				}
-			}
-			else
-			{
-				if (mes == 2)
-				{
-					if (dia<=28)
-					{
-						tipo = "date";
-					}
-				}
-				else
-				{
-					if (dia<=maxday(mes))
-					{
-						tipo = "date";
-					}
-				}
-			}
-		}
-		
-		return (T)tipo; 
-	}
-	
-	
-	/****************************
-	 * Recibimos un texto
-	 * Debemos revisar el tamaño de este texto
-	 ****************************/
-	@Override 
-	public T visitChar_literal(@NotNull sqlParser.Char_literalContext ctx) 
-	{ 
-		String text = ctx.CHAR().getText();
-		
-		text = text.substring(1, text.length() - 1);
-		
-		int length = text.length();
-		
-		return (T)"char";
-	}
-	
-	
-	/******************
-	 * @param year
-	 * @return
+	/* (non-Javadoc)
+	 * @see sqlBaseVisitor#visitDrop_table_statement(sqlParser.Drop_table_statementContext)
 	 */
-	public boolean leap(int year)
-	{
-		return (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
-	}
-	
-	
-	/************************
-
-	 * @param mes
-	 * @return
-	 */
-	public int maxday(int mes)
-	{
-		int dia = 0;
-		
-		if (mes == 1 || dia == 3 || dia == 5 || dia == 7 || dia == 8 || dia == 10 || dia == 12)
-			dia = 31;
-		else
-			dia = 30;
-		
-		return dia;
-	}
-	
-	public String compareDate(String date1, String date2)
-	{
-		date1.replaceAll("'", "");
-		date2.replaceAll("'", "");
-		
-		String valor1[] = date1.split("-");
-		String valor2[] = date2.split("-");
-		
-		if (Integer.parseInt(valor1[0])<Integer.parseInt(valor2[0]))
-		{
-			return "lower than";
-		}
-		else
-		{
-			if (Integer.parseInt(valor1[0])>Integer.parseInt(valor2[0]))
-			{
-				return "bigger than";
-			}
-			else
-			{
-				if (Integer.parseInt(valor1[1])<Integer.parseInt(valor2[1]))
+	@Override
+	public Object visitDrop_table_statement(sqlParser.Drop_table_statementContext ctx) {
+		// TODO Auto-generated method stub
+		String ID_Table = ctx.ID().getText();
+		// Verificar que haya un DB en uso
+				if (this.getCurrent().getName().isEmpty())
 				{
-					return "lower than";
+					String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+		        	this.errores.add(no_database_in_use);
 				}
 				else
 				{
-					if (Integer.parseInt(valor1[1])>Integer.parseInt(valor2[1]))
+					// Verificar que exista la tabla
+					if (this.getCurrent().existTable(ID_Table))
 					{
-						return "bigger than";
+						Table toAlter = this.getCurrent().getTable(ID_Table);
+						// Verificar si tiene referencias en fks
+						if (this.getCurrent().existRef(ID_Table))
+						{
+							for (Table i: this.getCurrent().getTables())
+								if (! i.getName().equals(ID_Table))
+								{
+									for (Constraint j: i.getForeignKey())
+										if (j.getId_ref().equals(ID_Table))
+										{
+											String delete_fk_first = "La Foreign Key \"" + j.getId() + "\" de la Tabla \"" + i.getName() + "\" hace referenca a la Tabla \"" + ID_Table + "\" que se quiere eliminar, por lo tanto se debe realizar primero el DROP CONSTRAINT correspondiente @ line: " + ctx.getStop().getLine();
+											this.errores.add(delete_fk_first);
+										}
+								}
+						}
+						else
+						{							
+							// Eliminar tabla de la data persistente
+							try
+							{					    		
+					    		File file = new File(this.dataPath+this.getCurrent().getName()+"\\"+ID_Table+".bin");					    		
+					    		
+					    		if(file.delete())
+					    		{
+					    			// Eliminar tabla del objeto					
+									this.getCurrent().deleteTable(ID_Table);
+					    			System.out.println("La Tabla \"" + ID_Table + "\" se ha eliminado exitosamente de la Base de Datos \"" + this.getCurrent().getName() + "\"");
+					    			this.messages.add("La Tabla \"" + ID_Table + "\" se ha eliminado exitosamente de la Base de Datos \"" + this.getCurrent().getName() + "\"");
+					    		}
+					    		else
+					    			System.out.println("Error al eliminar la Tabla \"" + ID_Table + "\" de la data persistente" );					    	   
+					    	}
+							catch(Exception e)
+							{					    		
+					    		e.printStackTrace();					    		
+					    	}							
+						}
 					}
 					else
 					{
-						if (Integer.parseInt(valor1[2])<Integer.parseInt(valor2[2]))
-						{
-							return "lower than";
-						}
-						else
-						{
-							if (Integer.parseInt(valor1[2])>Integer.parseInt(valor2[2]))
-							{
-								return "bigger than";
-							}
-							else
-							{
-								return "equal";
-							}
-						}
+						String table_not_found = "La Tabla \"" + ID_Table + "\" no existe en la Base de Datos \"" + this.getCurrent().getName() + "\" @line: " + ctx.getStop().getLine();
+						this.errores.add(table_not_found);
 					}
 				}
-			}
-		}
+		return (T)"";
+		//return super.visitDrop_table_statement(ctx);
 	}
-	
-	public boolean checkDate(String date)
-	{
-		if (!date.contains("-"))
-		{
-			return false;
-		}
-		else
-		{
-			String fecha[] = date.split("-");
-			
-			int size = fecha.length;
-			if (size!=3)
-				return false;
-			else
-			{
-				fecha[0].replaceAll("'", "");
-				fecha[2].replaceAll("'", "");
-				if(fecha[0].length() >4 && fecha[1].length() > 2 && fecha[2].length()>2)
-				{
-					return false;
-				}
-				else
-				{
-					//revisar que sean fechas validas
-					return true;
-				}
-			}	
-		}	
-	}
-	/**
-	 * 
-	 * 
-	 * 
-	 * 
-	 * 
-	 * VISITOR LOGIC: DATA MODELING LANGUAGE
-	 * 
-	 * 
-	 * 
-	 * 
-	 * 
-	 * 
-	 */
 
 	/**************************
 	 * INSERT
-	 **************************/
+	 * validamos el numero de columnas y valores
+	 * el tipo de cada columna con el valor ingresado
+	 * debemos ver que columnas no fueron ingresadas 
+	 * para llenarlas con NULL y que la tabla exista
+	 */
 	@Override
-	public Object visitInsert_value(sqlParser.Insert_valueContext ctx){
-		String ID = ctx.ID().getText();
+	public Object visitInsert_value(sqlParser.Insert_valueContext ctx) 
+	{
+		String id = ctx.ID().getText();
 		
-		//Checks current db in use
+		// Verificar que haya un DB en uso
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{
-			if (this.current.existTable(ID))
+		
+			if (this.actual.existTable(id))
 			{
-				table = this.getCurrent().getTable(ID);
-				ArrayList<String> row = new ArrayList();
+				//debemos revisar si existe la tabla en la base de datos actual
+				table_use = this.getCurrent().getTable(id);
+				
+				ArrayList<String> fila = new ArrayList();
+				
+				//Si no fueron ingresadas columnas tomamos el total en la tabla
+				int columnas;
 				int values;
-				int columns;
 				if (ctx.getChildCount()==7)
 				{
+					columnas = ctx.getChild(3).getChildCount();
 					values = ctx.getChild(5).getChildCount();
-					columns = ctx.getChild(3).getChildCount();
+					
 				}
 				else
 				{
+					columnas = table_use.getattributes().size()-1;
 					values = ctx.getChild(4).getChildCount();
-					columns = table.getattributes().size()-1;
+					
 				}
-				//Checks for the amount of errors BEFORE doing the INSERT statement
-				int errCont = this.errors.size();
 				
-				//Fills row with null
-				int colNum = table.getattributes().size();
-				for (int i=0; i<colNum;i++)
+				//Cantidad de errores antes de hacer el insert
+				int contErrores = this.errores.size();
+				
+				//llenamos la fila con NULL
+				int numCols = table_use.getattributes().size();
+				for (int i=0;i<numCols;i++)
 				{
-					row.add("NULL");
+					fila.add("NULL");
 				}
-				if (table != null)
+				
+				if (table_use != null)
 				{
-					if(columns <= values || (columns+2 <= values && ctx.getChild(3).getText().contains("("))|| (columns <= values+2 && ctx.getChild(5).getText().contains("(")))
+					//comparamos numero de columas es mayor o igual  a valores con y sin parentesis
+					if ( columnas <= values || (columnas+2 <= values && ctx.getChild(3).getText().contains("(")) || (columnas <= values+2 && ctx.getChild(5).getText().contains("(")))
 					{
+						
 						ArrayList<Attribute> cols;
 						ArrayList<Value> vals;
 						
-						if(ctx.getChildCount()==7)
+						//Si no fueron ingresadas columnas tomamos todas las de la tabla
+						if (ctx.getChildCount()==7)
 						{
-							cols = (ArrayList<Attribute>) this.visit(ctx.getChild(3));
-							vals = (ArrayList<Value>) this.visit(ctx.getChild(5));
+							cols = (ArrayList<Attribute>)this.visit(ctx.getChild(3));
+							vals = (ArrayList<Value>)this.visit(ctx.getChild(5));
+							
 						}
 						else
 						{
-							cols = table.getattributes();
+							cols = table_use.getattributes();
 							vals = (ArrayList<Value>)this.visit(ctx.getChild(4));
+							
 						}
+						
+						//si los array no son del mismo tamaño hubo algun error en el camino
+						//debemos revisar que el tipo del atributo sea igual al tipo del valor
+						//int cont = 0;
+						//if (cols.size()==vals.size())
 						{
-							for (int cont=0; cont<cols.size() && cont<vals.size();cont++)
+							for (int cont=0;cont<cols.size() && cont<vals.size();cont++)
 							{
-								Attribute attr = cols.get(cont);
-								Value val = vals.get(cont);
-								if (attr.gettype().equals(val.getType())|| val.getValue().toUpperCase().equals("NULL"))
+								Attribute atr = cols.get(cont);
+								Value valor = vals.get(cont);
+								if (atr.gettype().equals(valor.gettype()) || valor.getValue().toUpperCase().equals("NULL"))
 								{
-									if (attr.gettype().equals("char"))
+									if (atr.gettype().equals("char"))
 									{
-										if (attr.getSize()>= val.getSize()-2)
+										if (atr.getSize()>=valor.getSize()-2)
 										{
-											int index = this.table.getattributes().indexOf(attr);
-											row.set(index, val.getValue());
+											//agrego el valor a la fila en el index del atributo
+											int index = this.table_use.getattributes().indexOf(atr);
+											
+											fila.set(index, valor.getValue());
 										}
 										else
 										{
-											String rule_s = "Size of value: \"" + val.getValue() + "\" is bigger than the size declared for attribute: \"" + attr.getId() + "\" @line: "+ ctx.getStop().getLine();
-											this.errors.add(rule_s);
+											//error tamaño del valor mayor
+											String rule_5 = "El tamaño de '" + valor.getValue() + "' es mayor al tamaño reservado en la base de datos para '"+ atr.getId() +"' @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 										}
 									}
 									else
 									{
-										int index = this.table.getattributes().indexOf(attr);
-										row.set(index, val.getValue());
+										//agrego el valor a la fila en el index del atributo
+										int index = this.table_use.getattributes().indexOf(atr);
+										fila.set(index, valor.getValue());
 									}
 								}
 								else
 								{
-									//Checks if values can be casted into int or float
-									if (attr.gettype().equals("int")&& val.getType().equals("float"))
+									//debo revisar si pueden ser casteados
+									if (atr.gettype().equals("int") && valor.gettype().equals("float"))
 									{
-										String num = val.getValue();
+										String num = valor.getValue();
 										int index = num.indexOf('.');
 										num = num.substring(0, index);
-										val.setValue(num);
-										val.setType("int");
+										valor.setValue(num);
+										valor.settype("int");
 										
-										int index2 = this.table.getattributes().indexOf(attr);
-										row.set(index2,  val.getValue());
+										//agrego el valor a la fila en el index del atributo
+										int index2 = this.table_use.getattributes().indexOf(atr);
+										fila.set(index2, valor.getValue());
 									}
 									else
 									{
-										if (val.getType().equals("int") && attr.gettype().equals("float"))
+										if (valor.gettype().equals("int") && atr.gettype().equals("float"))
 										{
-											String num = val.getValue();
+											String num = valor.getValue();
 											num += ".0";
-											val.setValue(num);
-											val.setType("float");
+											valor.setValue(num);
+											valor.settype("float");
 											
-											int index = this.table.getattributes().indexOf(attr);
-											row.set(index, val.getValue());
+											//agrego el valor a la fila en el index del atributo
+											int index = this.table_use.getattributes().indexOf(atr);
+											fila.set(index, valor.getValue());
 										}
 										else
-											if(attr.gettype().equals("char") && val.getType().equals("date"))
+											if (atr.gettype().equals("char") && valor.gettype().equals("date"))
 											{
-												if(attr.getSize() >= val.getValue().length()-2)
+												if (atr.getSize() >= valor.getValue().length()-2)
 												{
-													int index = this.table.getattributes().indexOf(attr);
-													row.set(index, val.getValue());
+													//agrego el valor a la fila en el index del atributo
+													int index = this.table_use.getattributes().indexOf(atr);
+													fila.set(index, valor.getValue());
 												}
 												else
 												{
-													String rule_s = "Size of value: \"" + val.getValue() + "\" is bigger than the size declared for attribute: \"" + attr.getId() + "\" @line: "+ ctx.getStop().getLine();
-													this.errors.add(rule_s);
+													//error tamaño del valor mayor
+													String rule_5 = "El tamaño de '" + valor.getValue() + "' es mayor al tamaño reservado en la base de datos para '"+ atr.getId() +"' @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 												}
 											}
 											else
 											{
-												if (attr.gettype().equals("date") && val.getType().equals("char"))
+												if (atr.gettype().equals("date") && valor.gettype().equals("char"))
 												{
-													if(checkDate(val.getValue()))
+													if (checkDate(valor.getValue()))
 													{
-														int index = this.table.getattributes().indexOf(attr);
-														row.set(index,val.getValue());
+														int index = this.table_use.getattributes().indexOf(atr);
+														fila.set(index, valor.getValue());
 													}
 													else
 													{
-														String rule_c = "The value \""+ val.getValue() + "\", can't be casted to \"" + attr.gettype() +"\" @line: " + ctx.getStop().getLine();
-														this.errors.add(rule_c);
-													}	
+														String rule_5 = "El valor '" + valor.getValue() + "', no puede ser casteado a '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
+														this.errores.add(rule_5);
+													}
 												}
 												else
 												{
-													String rule_c = "The type of value \""+ val.getValue() + "\", can't be casted to \"" + attr.gettype() +"\" @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_c);
+													String rule_5 = "El tipo de del valor'" + valor.getValue() + "' no puede ser casteado a '"+ atr.gettype() +"' @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 												}
-												
 											}
 									}
-								}	
-							}			
-							//Checks for nulls in PK		
+								}
+								//cont++;
+							}
+							
+							//Revisamos que no venga un NULL en una PrimaryKey
 							{
-								if (this.table.getPrimaryKeys().size() > 0)
+								if (this.table_use.getPrimaryKeys().size() > 0)
 								{
-									Constraint key = this.table.getPrimaryKeys().get(0);
+									Constraint key = this.table_use.getPrimaryKeys().get(0);
 									for (String idk : key.getIDS_local())
 									{
-										Attribute atrk = this.table.getID(idk);
-										int indexk = this.table.getattributes().indexOf(atrk);
-										if (row.get(indexk).toUpperCase().equals("NULL"))
+										Attribute atrk = this.table_use.getID(idk);
+										int indexk = this.table_use.getattributes().indexOf(atrk);
+										if (fila.get(indexk).toUpperCase().equals("NULL"))
 										{
-											String rule_5 = "Nulls can't be inserted in Primary Key @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);	
+											String rule_5 = "Se esta queriendo insertar NULL en una llave primaria @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);	
 											break;
 										}
 									}
 								}
 							}
-							if (errCont == this.errors.size())
+							
+							//Agrego la fila solo si el numero de errores sigue siendo el mismo
+							if (contErrores == this.errores.size())
 							{
-								if (PrimaryKey(row, -1))
+								if (PrimaryKey(fila, -1))
 								{
 									
 									
 									//revisar check
-									ArrayList<Constraint> check = table.getChecks();//obtenemos checks
-									Table temp = table;//guardo la tabla temporal
-									table = new Table();
-									table.setattributes(temp.getattributes());//seteamos atributos
-									table.addData(row);//agregamos fila para evaluar check
+									ArrayList<Constraint> check = table_use.getChecks();//obtenemos checks
+									Table temp = table_use;//guardo la tabla temporal
+									table_use = new Table();
+									table_use.setattributes(temp.getattributes());//seteamos atributos
+									table_use.addData(fila);//agregamos fila para evaluar check
 									boolean set = true;
 									for (Constraint ct: check){
 										ANTLRInputStream input = new ANTLRInputStream(ct.getCondition());
@@ -2082,51 +1707,52 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										Object obj = (Object)visit(tree);
 										
 										if (obj == null){
-											String rule_5 = "Unexpected error evaluating Check "+ct.getId()+" @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "Error inesperado en evaluacion de check "+ct.getId()+" @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											set = false;
 										}else{
 											LinkedHashSet<Integer> lhk = (LinkedHashSet<Integer>) obj;
 											if (lhk.size() == 0){
-												String rule_5 = "Inserted values don't meet check evalation "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "Valores ingresados no cumplen evaluacion de check "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												set = false;
 											}
 										}
 										
 									}
+									
 									if (set){
-										if (ForeignKey(row,-1)){
-											table = temp;
+										if (ForeignKey(fila,-1)){
+											table_use = temp;
 
-											this.table.addData(row);
+											this.table_use.addData(fila);
 											this.inserted_rows++;
 										}else{
-											String rule_5 = "Value does not exist in referenced table @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "Valor de llave foranea no existe @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 										}
 										
 									}
 								}
 								else
 								{
-									String rule_5 = "Can't have duplicated Primary Keys @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "Se esta duplicando una llave primaria @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 								}
 							}
 						}
 					}
 					else
 					{	
-						String rule_5 = "Cant INSERT more columns than values @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						String rule_5 = "No se puede hacer INSERT con mayor numero de columnas  que valores a insertar @line: " + ctx.getStop().getLine();
+						this.errores.add(rule_5);
 					}
 				}
 			}
 			else
 			{
-				String rule_5 = "The table " + ID + " does not exist in database " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
-				this.errors.add(rule_5);
+				String rule_5 = "La tabla " + id + " no existe en la base de datos " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
+				this.errores.add(rule_5);
 			}
 		}		
 		
@@ -2135,9 +1761,12 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		// TODO Auto-generated method stub
 		return new String();
 	}
-	/**************************
+	
+	
+	/*****************************
 	 * LIST
-	 **************************/
+	 * devolvemos un array con el tipo y valor de cada valor ingresado
+	 */
 	@Override
 	public Object visitList(sqlParser.ListContext ctx) {
 		
@@ -2159,8 +1788,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 				{
 					if (tipo.equals("Error"))
 					{
-						String rule_5 = "Date " + text + " isn't valid @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						String rule_5 = "La fecha " + text + " no es valida @line: " + ctx.getStop().getLine();
+						this.errores.add(rule_5);
 						valor = new Value(text,"date");
 					}
 					else
@@ -2174,9 +1803,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		// TODO Auto-generated method stub
 		return values;
 	}
+
+	
 	/*****************************
 	 * COLUMNS
-	 *****************************/
+	 * devolvemos un array con los atributos/columna a 
+	 * la que se desea ingresar un valor
+	 * debemos revisar que las columnas existan en la tabla
+	 */
 	@Override
 	public Object visitColumns(sqlParser.ColumnsContext ctx) {
 		
@@ -2187,51 +1821,56 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			{
 				
 				String columna = ctx.getChild(i).getText(); 
-				if (this.table.hasAttribute(columna))
+				if (this.table_use.hasAttribute(columna))
 				{
-					Attribute id = this.table.getID(columna);
+					Attribute id = this.table_use.getID(columna);
 					columnas.add(id);
 				}
 				else
 				{
-					String rule_5 = "The table " + this.table.getName() + " does not contain the column: " + columna + " @line: " + ctx.getStop().getLine();
-					this.errors.add(rule_5);
+					String rule_5 = "La tabla " + this.table_use.getName() + " no contiene la columna " + columna + " @line: " + ctx.getStop().getLine();
+					this.errores.add(rule_5);
 				}
 			}
 		
 		// TODO Auto-generated method stub
 		return columnas;
 	}
+	
+
 	/*************************
 	 * UPDATE
-	 *************************/
+	 * reviso si tiene where o no
+	 * si no tiene actualizo las columnas a actualizar de todas las filas
+	 * si hay actualizo solo de las filas que devuelva condition
+	 */
 	@Override
 	public Object visitUpdate_value(sqlParser.Update_valueContext ctx) {
 		
 		String id = ctx.getChild(1).getText();
-		int contErrores = this.errors.size();
+		int contErrores = this.errores.size();
 		
 		// Verificar que haya un DB en uso
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{
 		
-			if (this.current.existTable(id))
+			if (this.actual.existTable(id))
 			{
-				this.table = this.current.getTable(id);
-				int size = this.table.getData().size();
+				this.table_use = this.actual.getTable(id);
+				int size = this.table_use.getData().size();
 				
 				if (ctx.getChildCount() == 5)
 				{
 					ArrayList<String> newfila = (ArrayList<String>)this.visit(ctx.getChild(3));
 					
-					for (int i = 0; i<size && contErrores==this.errors.size();i++)
+					for (int i = 0; i<size && contErrores==this.errores.size();i++)
 					{
-						this.table.getData().set(i, newfila);
+						this.table_use.getData().set(i, newfila);
 					}
 				}
 				else
@@ -2239,13 +1878,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					Object obj = (Object) visit(ctx.getChild(5));
 					if (obj == null){
 						String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						this.errores.add(rule_5);
 						return null;
 					}
 					
 					if (!(obj instanceof LinkedHashSet)){
 						String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						this.errores.add(rule_5);
 						return null;
 					}
 					
@@ -2259,10 +1898,10 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						fin.add("");
 					
 					boolean flag = true;
-					if (contErrores == this.errors.size())
+					if (contErrores == this.errores.size())
 					{
 						for (int i: index){
-							fila = table.getData().get(i);
+							fila = table_use.getData().get(i);
 							for (String col : newfila)
 							{
 								int index2 = newfila.indexOf(col);
@@ -2276,18 +1915,18 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							
 							//Revisamos que no venga un NULL en una PrimaryKey
 							{
-								if (this.table.getPrimaryKeys().size() > 0)
+								if (this.table_use.getPrimaryKeys().size() > 0)
 								{
-									Constraint key = this.table.getPrimaryKeys().get(0);
+									Constraint key = this.table_use.getPrimaryKeys().get(0);
 									for (String idk : key.getIDS_local())
 									{
-										Attribute atrk = this.table.getID(idk);
-										int indexk = this.table.getattributes().indexOf(atrk);
+										Attribute atrk = this.table_use.getID(idk);
+										int indexk = this.table_use.getattributes().indexOf(atrk);
 										if (fila.get(indexk).toUpperCase().equals("NULL"))
 										{
 											flag = false;
-											String rule_5 = "NULL can't be inserted in a Primary Key @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);	
+											String rule_5 = "Se esta queriendo insertar NULL en una llave primaria @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);	
 											break;
 										}
 									}
@@ -2300,11 +1939,11 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!ForeignKey(fin,i))
 								{
 									//revisar check
-									ArrayList<Constraint> check = table.getChecks();//obtenemos checks
-									Table temp = table;//guardo la tabla temporal
-									table = new Table();
-									table.setattributes(temp.getattributes());//seteamos atributos
-									table.addData(fin);//agregamos fila para evaluar check
+									ArrayList<Constraint> check = table_use.getChecks();//obtenemos checks
+									Table temp = table_use;//guardo la tabla temporal
+									table_use = new Table();
+									table_use.setattributes(temp.getattributes());//seteamos atributos
+									table_use.addData(fin);//agregamos fila para evaluar check
 									
 									for (Constraint ct: check){
 										ANTLRInputStream input = new ANTLRInputStream(ct.getCondition());
@@ -2315,14 +1954,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										
 										Object obj1 = (Object)visit(tree);
 										if (obj1 == null){
-											String rule_5 = "Unexpected error evaluating a check "+ct.getId()+" @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "Error inesperado en evaluacion de check "+ct.getId()+" @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											flag = false;
 										}else{
 											LinkedHashSet<Integer> lhk = (LinkedHashSet<Integer>) obj1;
 											if (lhk.size() == 0){
-												String rule_5 = "Inserted values don't meet check requirements "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "Valores ingresados no cumplen evaluacion de check "+ct.getId()+" "+ct.getCondition()+" @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												flag = false;
 											}
 										}
@@ -2333,16 +1972,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								else
 								{
 									flag=false;
-									String rule_5 = "The Value trying to be updated references another Table  @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "Se quiere actualizar un valor que hace referencia a otra tabla  @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									break;
 								}
 							}
 							else
 							{
 								flag=false;
-								String rule_5 = "Duplicated Primary Key  @line: " + ctx.getStop().getLine();
-								this.errors.add(rule_5);
+								String rule_5 = "Una llave primaria esta siendo duplicada  @line: " + ctx.getStop().getLine();
+								this.errores.add(rule_5);
 								break;
 							}
 						}
@@ -2351,7 +1990,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						if (flag)
 						{
 							for (int i: index){
-								this.table.getData().set(i, fin);
+								this.table_use.getData().set(i, fin);
 								this.updated_rows++;
 							}
 						}
@@ -2361,7 +2000,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			else
 			{
 				String rule_5 = "La tabla " + id + " no existe en la base de datos " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
-				this.errors.add(rule_5);
+				this.errores.add(rule_5);
 			}
 		}
 		
@@ -2369,15 +2008,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		return super.visitUpdate_value(ctx);
 	}
 	
+	
 	/**************************
 	 * Asignacion
-	 **************************/
+	 * llenar fila con un valor default
+	 * las filas que permanezcan con ese valor 
+	 * no deben ser cambiadas
+	 */
 	@Override
 	public Object visitAsignacion(sqlParser.AsignacionContext ctx) {
 		
 		ArrayList<String> newfila = new ArrayList<String>();
 		
-		int numCols = this.table.getattributes().size();
+		int numCols = this.table_use.getattributes().size();
 		for (int i=0;i<numCols;i++)
 			newfila.add("UPDATE");
 		
@@ -2390,15 +2033,15 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			{
 				if (j==0 || j%4==0)
 				{
-					if (this.table.hasAttribute(text))
+					if (this.table_use.hasAttribute(text))
 					{
-						atr = this.table.getID(text);
-						index = this.table.getattributes().indexOf(atr);
+						atr = this.table_use.getID(text);
+						index = this.table_use.getattributes().indexOf(atr);
 					}
 					else
 					{
-						String rule_5 = "La tabla " + this.table.getName() + " no contiene la columna " + text + " @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						String rule_5 = "La tabla " + this.table_use.getName() + " no contiene la columna " + text + " @line: " + ctx.getStop().getLine();
+						this.errores.add(rule_5);
 					}
 				}
 				else
@@ -2415,8 +2058,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							}
 							else
 							{
-								String rule_5 = "The size of '" + text + "' es bigger than the size reserved for character: '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
-								this.errors.add(rule_5);
+								String rule_5 = "El tamaño de '" + text + "' es mayor al tamaño reservado para '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
+								this.errores.add(rule_5);
 							}
 						}
 						else
@@ -2445,8 +2088,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									}
 									else
 									{
-										String rule_5 = "The size of '" + text + "' is bigger than the size reserved for '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "El tamaño de '" + text + "' es mayor al tamaño reservado para '"+ atr.getId() +" @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 									}
 								}
 								else
@@ -2459,14 +2102,14 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											String rule_5 = "Value: '" + text + "', can't be casted to '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "El valor '" + text + "', no puede ser casteado a '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 										}
 									}
 									else
 									{
-										String rule_5 = "The type: '" + tipo + "', can't be casted to '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "El tipo: '" + tipo + "', no puede ser casteado a '"+ atr.gettype() +" @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 									}
 								}
 							}
@@ -2493,16 +2136,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		// Verificar que haya un DB en uso
 		if (this.getCurrent().getName().isEmpty())
 		{
-			String noDB = "No database in use @line: " + ctx.getStop().getLine();
-			this.errors.add(noDB);
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
 		}
 		else
 		{		
-			this.table = this.getCurrent().getTable(id);
+			this.table_use = this.getCurrent().getTable(id);
 			
-			if (table == null){
-				String rule_5 = "The table " + id + " does not exist in DataBase: " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
-				this.errors.add(rule_5);
+			if (table_use == null){
+				String rule_5 = "La tabla " + id + " no existe en la base de datos " + this.getCurrent().getName() + " @line: " + ctx.getStop().getLine();
+				this.errores.add(rule_5);
 				return null;
 			}
 			
@@ -2513,33 +2156,33 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			{
 				// Revisar FKS
 				// Verificar que alguna fk haga referencia a esta tabla
-				if (this.current.existRef(id))
+				if (this.actual.existRef(id))
 				{
-					for (Table i: this.current.getTables())
+					for (Table i: this.actual.getTables())
 						for (Constraint f: i.getForeignKey())
 							if (f.getId_ref().equals(id))
 							{							
 								ArrayList<Integer> index_table_with_fk = new ArrayList<Integer>();
-								ArrayList<Integer> index_table = new ArrayList<Integer>();
+								ArrayList<Integer> index_table_use = new ArrayList<Integer>();
 								for (String s: f.getIDS_local())
 									index_table_with_fk.add(i.getattributesNames().indexOf(s));
 								for (String s: f.getIDS_refs())
-									index_table.add(this.table.getattributesNames().indexOf(s));							
+									index_table_use.add(this.table_use.getattributesNames().indexOf(s));							
 								// Verificar que sean del mismo tamaño sino no se puede hacer la comapracion
-								if (index_table_with_fk.size() == index_table.size())
+								if (index_table_with_fk.size() == index_table_use.size())
 								{
 									int cont = 0;
 									int index_fk = 0;
-									for (Integer index_i: index_table)
+									for (Integer index_i: index_table_use)
 									{
 										index_fk = index_table_with_fk.get(cont);
-										for (String use_data_i: this.table.dataColumnI(index_i))
+										for (String use_data_i: this.table_use.dataColumnI(index_i))
 											for (String ref_data_i: i.dataColumnI(index_fk))
 											{
 												if (use_data_i.equals(ref_data_i))
 												{
-													String data_to_delete_in_ref = "Can't delete the value \"" + use_data_i + "\" because it belongs to table:  \"" + i.getName() + "\", esta vinculacion la hace la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
-													this.errors.add(data_to_delete_in_ref);
+													String data_to_delete_in_ref = "No se puede eliminar el valor \"" + use_data_i + "\" porque esta incluido en la Tabla \"" + i.getName() + "\", esta vinculacion la hace la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+													this.errores.add(data_to_delete_in_ref);
 													errores++;
 												}
 											}
@@ -2548,8 +2191,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								}
 								else
 								{
-									String compare_failed = "Conflict detected with Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
-									this.errors.add(compare_failed);
+									String compare_failed = "No se puede eliminar porque existe un conflicto en la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+									this.errores.add(compare_failed);
 									errores++;
 								}
 							}
@@ -2557,23 +2200,28 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 				// Borrar toda la data si no hay errores
 				if (errores == 0)
 				{
-					this.messages.add("Deleted " + this.table.getData().size() + " rows from the table \"" + this.table.getName() + "\"");
-					table.setData(new ArrayList<ArrayList<String>>());
+					this.messages.add("Se eliminaron " + this.table_use.getData().size() + " filas de la Tabla \"" + this.table_use.getName() + "\"");
+					table_use.setData(new ArrayList<ArrayList<String>>());
 				}
-				return table;				
+				return table_use;				
 			}
 			
+			/*if (ctx.getChildCount() <= 4){
+				if (errores == 0)
+					table_use.setData(new ArrayList<ArrayList<String>>());
+				return table_use;
+			}*/			
 			
 			Object obj = (Object) visit(ctx.getChild(4));
 			if (obj == null){
-				String rule_5 = "Error in the defined conditions @line: " + ctx.getStop().getLine();
-				this.errors.add(rule_5);
+				String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
+				this.errores.add(rule_5);
 				return null;
 			}
 			
 			if (!(obj instanceof LinkedHashSet)){
-				String rule_5 = "Error in the defined conditions @line: " + ctx.getStop().getLine();
-				this.errors.add(rule_5);
+				String rule_5 = "Error en condiciones definidas @line: " + ctx.getStop().getLine();
+				this.errores.add(rule_5);
 				return null;
 			}
 			
@@ -2584,29 +2232,29 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 			
 			// Revisar FKS
 			// Verificar que alguna fk haga referencia a esta tabla
-			if (this.current.existRef(id))
+			if (this.actual.existRef(id))
 			{
-				for (Table i: this.current.getTables())
+				for (Table i: this.actual.getTables())
 					for (Constraint f: i.getForeignKey())
 						if (f.getId_ref().equals(id))
 						{							
 							ArrayList<Integer> index_table_with_fk = new ArrayList<Integer>();
-							ArrayList<Integer> index_table = new ArrayList<Integer>();
+							ArrayList<Integer> index_table_use = new ArrayList<Integer>();
 							for (String s: f.getIDS_local())
 								index_table_with_fk.add(i.getattributesNames().indexOf(s));
 							for (String s: f.getIDS_refs())
-								index_table.add(this.table.getattributesNames().indexOf(s));							
+								index_table_use.add(this.table_use.getattributesNames().indexOf(s));							
 							// Verificar que sean del mismo tamaño sino no se puede hacer la comapracion
-							if (index_table_with_fk.size() == index_table.size())
+							if (index_table_with_fk.size() == index_table_use.size())
 							{
 								int cont = 0;
 								int index_fk = 0;
-								for (Integer index_i: index_table)
+								for (Integer index_i: index_table_use)
 								{
 									index_fk = index_table_with_fk.get(cont);
 									int cont_2 = 0;
 									int pos = 0;
-									for (String use_data_i: this.table.dataColumnIWithIndexs(index_i, index))
+									for (String use_data_i: this.table_use.dataColumnIWithIndexs(index_i, index))
 									{
 										int match = 0;
 										pos = index.get(cont_2);										
@@ -2614,8 +2262,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										{
 											if (use_data_i.equals(ref_data_i))
 											{
-												String data_to_delete_in_ref = "Value \"" + use_data_i + "\" can't be deleted, included in table: \"" + i.getName() + "\", via Foreign Key: \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
-												this.errors.add(data_to_delete_in_ref);
+												String data_to_delete_in_ref = "No se puede eliminar el valor \"" + use_data_i + "\" porque esta incluido en la Tabla \"" + i.getName() + "\", esta vinculacion la hace la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+												this.errores.add(data_to_delete_in_ref);
 												errores++;
 												match++;
 											}											
@@ -2629,23 +2277,30 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							}
 							else
 							{
-								String compare_failed = "Can't DELETE, conflict with Foreign Key: \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
-								this.errors.add(compare_failed);
+								String compare_failed = "No se puede eliminar porque existe un conflicto en la Foreign Key \"" + f.getId() + "\" @line: " + ctx.getStop().getLine();
+								this.errores.add(compare_failed);
 								errores++;
 							}							
 						}
 			}
 			// Indices que cumplen con el WHERE CONDITION y no tengan restriccion de CONSTRAINT
 			for (int i: indexesToDelete){
-				table.getData().remove(i);
+				table_use.getData().remove(i);
 			}
 			if (! indexesToDelete.isEmpty())
-				this.messages.add("Deleted " + indexesToDelete.size() + " rows from the table: \"" + this.table.getName() + "\"");
+				this.messages.add("Se eliminaron " + indexesToDelete.size() + " filas de la Tabla \"" + this.table_use.getName() + "\"");
 		}
-		return (T) table;
+		return (T) table_use;
 	}
+
+
+	
+	
 	/**************************
 	 * Condition
+	 * Revisamos cada comparacion
+	 * Devolvemos un arrayList de arrraylis de string
+	 * que contiene todas las filas que debemos eliminar
 	 */
 	@Override 
 	public T visitConditionNot(sqlParser.ConditionNotContext ctx) 
@@ -2661,7 +2316,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		
 		LinkedHashSet<Integer> indices = (LinkedHashSet<Integer>) obj;
 		
-		int size = table.getData().size();
+		int size = table_use.getData().size();
 		
 		LinkedHashSet<Integer> nIndices = new LinkedHashSet();
 		
@@ -2768,20 +2423,20 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		
 		String id = (String) visit(ctx.getChild(0)); //agarro el primer id
 		
-		if (this.table.hasAttribute(id)) //reviso si existe en la tabla
+		if (this.table_use.hasAttribute(id)) //reviso si existe en la tabla
 		{
 			
-			if (table.isAmbiguous(id)){
+			if (table_use.isAmbiguous(id)){
 				String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
-				errors.add(error_);
+				errores.add(error_);
 				return null;
 			}
 			//tomo el atributo de la tabla y el indice de este
 			
-			Attribute atr = this.table.getID(id);
+			Attribute atr = this.table_use.getID(id);
 			
 			Attribute id2 = new Attribute();
-			int index = this.table.getattributes().indexOf(atr);
+			int index = this.table_use.getattributes().indexOf(atr);
 			
 			
 			//visito el ultimo hijo 
@@ -2822,8 +2477,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								}
 								else
 								{
-									String rule_5 = "Can't compare type:  " + atr.getId() + " with type:  " + tipo + " @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "El tipo de " + atr.getId() + " no se puede comparar con un " + tipo + " @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 							}
@@ -2836,22 +2491,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 				if (tipo.equals("Error"))
 				{
 					// no acepto la fecha
-					String rule_5 = "The date " + value + " isn't valid @line: " + ctx.getStop().getLine();
-					this.errors.add(rule_5);
+					String rule_5 = "La fecha " + value + " no es valida @line: " + ctx.getStop().getLine();
+					this.errores.add(rule_5);
 					return null;
 				}
 				else
 				{
 					//Si es una columna de la tabla
 					String columna = (String)visit(ctx.getChild(2)); 
-					if (this.table.hasAttribute(columna))
+					if (this.table_use.hasAttribute(columna))
 					{
-						if (table.isAmbiguous(columna)){
+						if (table_use.isAmbiguous(columna)){
 							String error_ = "La llamada <<"+columna+">> es ambigua @line: " + ctx.getStop().getLine();
-							errors.add(error_);
+							errores.add(error_);
 							return null;
 						}
-						id2 = this.table.getID(columna);
+						id2 = this.table_use.getID(columna);
 						
 						value = "'";
 						
@@ -2879,8 +2534,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									}
 									else
 									{
-										String rule_5 = "The type " + atr.getId() + " can't be compared with  a " + id2.gettype() + " @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "El tipo de " + atr.getId() + " no se puede comparar con un " + id2.gettype() + " @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 								}
@@ -2890,8 +2545,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					}
 					else
 					{
-						String rule_5 = "The table " + this.table.getName() + " doesn't have the column:  " + columna + " @line: " + ctx.getStop().getLine();
-						this.errors.add(rule_5);
+						String rule_5 = "La tabla " + this.table_use.getName() + " no contiene la columna " + columna + " @line: " + ctx.getStop().getLine();
+						this.errores.add(rule_5);
 						return null;
 					}
 				}
@@ -2908,7 +2563,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (op.equals("=") || op.equals(">=") || op.equals("<="))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
 							if (value.toUpperCase().equals(fila.get(index).toUpperCase()))
 								list.add(cont);
@@ -2918,7 +2573,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (op.equals("<>"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
 							if (!value.toUpperCase().equals(fila.get(index).toUpperCase()))
 								list.add(cont);
@@ -2937,13 +2592,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare a NULL with a value. @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -2959,16 +2614,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -2987,19 +2642,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (compareDate(comp, value).equals("equal"))
+											if (compareDate(comp, value).equals("igual"))
 												list.add(cont);
 											cont++;
 										}
@@ -3010,22 +2665,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare value with NULL @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (compareDate(comp, valor).equals("equal"))
+												if (compareDate(comp, valor).equals("igual"))
 													list.add(cont);
 												cont++;
 											}
@@ -3037,13 +2692,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare with a NULL @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3056,16 +2711,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare NULL with a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3089,13 +2744,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare Null with a Value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -3111,16 +2766,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare Null with a Value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -3139,19 +2794,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare Null to value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (!compareDate(comp, value).equals("equal"))
+											if (!compareDate(comp, value).equals("igual"))
 												list.add(cont);
 											cont++;
 										}
@@ -3162,22 +2817,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (!compareDate(comp, valor).equals("equal"))
+												if (!compareDate(comp, valor).equals("igual"))
 													list.add(cont);
 												cont++;
 											}
@@ -3189,13 +2844,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3208,16 +2863,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3240,13 +2895,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -3262,16 +2917,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -3290,19 +2945,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (compareDate(comp, value).equals("lower than"))
+											if (compareDate(comp, value).equals("menor"))
 												list.add(cont);
 											cont++;
 										}
@@ -3313,22 +2968,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (compareDate(comp, valor).equals("lower than"))
+												if (compareDate(comp, valor).equals("menor"))
 													list.add(cont);
 												cont++;
 											}
@@ -3340,13 +2995,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3359,16 +3014,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3391,13 +3046,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -3413,16 +3068,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -3441,19 +3096,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (compareDate(comp, value).equals("bigger than"))
+											if (compareDate(comp, value).equals("mayor"))
 												list.add(cont);
 											cont++;
 										}
@@ -3464,22 +3119,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (compareDate(comp, valor).equals("bigger than"))
+												if (compareDate(comp, valor).equals("mayor"))
 													list.add(cont);
 												cont++;
 											}
@@ -3491,13 +3146,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3510,16 +3165,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3542,13 +3197,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -3564,16 +3219,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -3592,19 +3247,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("lower than"))
+											if (compareDate(comp, value).equals("igual") || compareDate(comp, value).equals("menor"))
 												list.add(cont);
 											cont++;
 										}
@@ -3615,22 +3270,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (compareDate(comp, valor).equals("equal") || compareDate(comp, valor).equals("lower than"))
+												if (compareDate(comp, valor).equals("igual") || compareDate(comp, valor).equals("menor"))
 													list.add(cont);
 												cont++;
 											}
@@ -3642,13 +3297,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3661,16 +3316,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3693,13 +3348,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 								}
 								else
@@ -3715,16 +3370,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							if (value.equals("'") && (atr.gettype().equals("int") || atr.gettype().equals("float")))
 							{
-								int index2 = this.table.getattributes().indexOf(id2);
+								int index2 = this.table_use.getattributes().indexOf(id2);
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									String s = fila.get(index2);
 									String s1 = fila.get(index);
 									if (s.toLowerCase().equals("null") || s1.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
@@ -3743,19 +3398,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
 										{
-											if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("bigger than"))
+											if (compareDate(comp, value).equals("igual") || compareDate(comp, value).equals("mayor"))
 												list.add(cont);
 											cont++;
 										}
@@ -3766,22 +3421,22 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 									//Si ambos son date  y es con columna
 									if (value.equals("'") && atr.gettype().equals("date") && id2.gettype().equals("date"))
 									{
-										int index2 = this.table.getattributes().indexOf(id2);
+										int index2 = this.table_use.getattributes().indexOf(id2);
 										int cont = 0;
-										for (ArrayList<String> fila : this.table.getData())
+										for (ArrayList<String> fila : this.table_use.getData())
 										{
 											
 											String comp = fila.get(index);
 											String valor = fila.get(index2);
 											if (comp.toLowerCase().equals("null") || valor.toLowerCase().equals("null"))
 											{
-												String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-												this.errors.add(rule_5);
+												String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+												this.errores.add(rule_5);
 												return null;
 											}
 											else
 											{
-												if (compareDate(comp, valor).equals("equal") || compareDate(comp, valor).equals("bigger than"))
+												if (compareDate(comp, valor).equals("igual") || compareDate(comp, valor).equals("mayor"))
 													list.add(cont);
 												cont++;
 											}
@@ -3793,13 +3448,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 										{
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String comp = fila.get(index);
 												if (comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3812,16 +3467,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 										}
 										else
 										{
-											int index2 = this.table.getattributes().indexOf(id2);
+											int index2 = this.table_use.getattributes().indexOf(id2);
 											int cont = 0;
-											for (ArrayList<String> fila : this.table.getData())
+											for (ArrayList<String> fila : this.table_use.getData())
 											{
 												String valor = fila.get(index2);
 												String comp = fila.get(index);
 												if (valor.toLowerCase().equals("null") || comp.toLowerCase().equals("null"))
 												{
-													String rule_5 = "Can't compare Null to a value @line: " + ctx.getStop().getLine();
-													this.errors.add(rule_5);
+													String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+													this.errores.add(rule_5);
 													return null;
 												}
 												else
@@ -3844,13 +3499,18 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		}
 		else
 		{
-			String rule_5 = "The tab " + this.table.getName() + " doesn't have the column " + id + " @line: " + ctx.getStop().getLine();
-			this.errors.add(rule_5);
+			String rule_5 = "La tabla " + this.table_use.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+			this.errores.add(rule_5);
 			return null;
 		}
 	}
+	
+	
 	/*********************************
 	 * CompLit
+	 * 
+	 * Revisamos si e suna comparacion
+	 * solo de literales
 	 */
 	@Override
 	public Object visitCompLit(sqlParser.CompLitContext ctx) {
@@ -3878,9 +3538,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (compareDate(value,value2).equals("equal"))
+							if (compareDate(value,value2).equals("igual"))
 								list.add(cont);
 							cont++;
 						}
@@ -3892,7 +3552,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)==0)
 									list.add(cont);
@@ -3902,7 +3562,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)==0)
 									list.add(cont);
@@ -3915,9 +3575,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (!compareDate(value,value2).equals("equal"))
+							if (!compareDate(value,value2).equals("igual"))
 								list.add(cont);
 							cont++;
 						}
@@ -3929,7 +3589,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)!=0)
 									list.add(cont);
@@ -3939,7 +3599,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)!=0)
 									list.add(cont);
@@ -3952,9 +3612,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (compareDate(value,value2).equals("lower than"))
+							if (compareDate(value,value2).equals("menor"))
 								list.add(cont);
 							cont++;
 						}
@@ -3966,7 +3626,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)<0)
 									list.add(cont);
@@ -3976,7 +3636,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)<0)
 									list.add(cont);
@@ -3989,9 +3649,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (compareDate(value,value2).equals("bigger than"))
+							if (compareDate(value,value2).equals("mayor"))
 								list.add(cont);
 							cont++;
 						}
@@ -4003,7 +3663,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)>0)
 									list.add(cont);
@@ -4013,7 +3673,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)>0)
 									list.add(cont);
@@ -4026,9 +3686,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (compareDate(value,value2).equals("lower than") || compareDate(value,value2).equals("equal"))
+							if (compareDate(value,value2).equals("menor") || compareDate(value,value2).equals("igual"))
 								list.add(cont);
 							cont++;
 						}
@@ -4040,7 +3700,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)<0 || num.compareTo(num2)==0)
 									list.add(cont);
@@ -4050,7 +3710,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)<0 || value.compareTo(value2)==0)
 									list.add(cont);
@@ -4063,9 +3723,9 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (tipo.equals("date") && tipo2.equals("date"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
-							if (compareDate(value,value2).equals("bigger than") || compareDate(value,value2).equals("equal"))
+							if (compareDate(value,value2).equals("mayor") || compareDate(value,value2).equals("igual"))
 								list.add(cont);
 							cont++;
 						}
@@ -4077,7 +3737,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							int cont = 0;
 							Double num = Double.parseDouble(value);
 							Double num2 = Double.parseDouble(value2);
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (num.compareTo(num2)>0 || num.compareTo(num2)==0)
 									list.add(cont);
@@ -4087,7 +3747,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						else
 						{
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								if (value.compareTo(value2)>0 || value.compareTo(value2)==0)
 									list.add(cont);
@@ -4107,6 +3767,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	
 	/*********************************
 	 * CompLitId
+	 * Revisamso si es una comparacion
+	 * de literal con id
 	 */
 	@Override
 	public Object visitCompLitId(sqlParser.CompLitIdContext ctx) {
@@ -4116,16 +3778,16 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		
 		
 		String id = (String)visit(ctx.getChild(2)); //agarro el primer id
-		if (this.table.hasAttribute(id)) //reviso si existe en la tabla
+		if (this.table_use.hasAttribute(id)) //reviso si existe en la tabla
 		{
-			if (table.isAmbiguous(id)){
-				String error_ = "The call <<"+id+">> is ambiguous @line: " + ctx.getStop().getLine();
-				errors.add(error_);
+			if (table_use.isAmbiguous(id)){
+				String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
+				errores.add(error_);
 				return null;
 			}
 			//tomo el atributo de la tabla y el indice de este
-			Attribute atr = this.table.getID(id);
-			int index = this.table.getattributes().indexOf(atr);
+			Attribute atr = this.table_use.getID(id);
+			int index = this.table_use.getattributes().indexOf(atr);
 			
 			//visito el ultimo hijo 
 			String tipo = (String)this.visit(ctx.getChild(0)); //si es literal, voy a recibir el tipo
@@ -4165,8 +3827,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								}
 								else
 								{
-									String rule_5 = "The type of " + atr.getId() + " can't be compared to " + tipo + " @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "El tipo de " + atr.getId() + " no se puede comparar con un " + tipo + " @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 								}
 							}
 								
@@ -4178,8 +3840,8 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 				if (tipo.equals("Error"))
 				{
 					// no acepto la fecha
-					String rule_5 = "The date " + value + " is not valid @line: " + ctx.getStop().getLine();
-					this.errors.add(rule_5);
+					String rule_5 = "La fecha " + value + " no es valida @line: " + ctx.getStop().getLine();
+					this.errores.add(rule_5);
 					return null;
 				}
 				
@@ -4196,7 +3858,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (op.equals("=") || op.equals(">=") || op.equals("<="))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
 							if (value.toUpperCase().equals(fila.get(index).toUpperCase()))
 								list.add(cont);
@@ -4206,7 +3868,7 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 					if (op.equals("<>"))
 					{
 						int cont = 0;
-						for (ArrayList<String> fila : this.table.getData())
+						for (ArrayList<String> fila : this.table_use.getData())
 						{
 							if (!value.toUpperCase().equals(fila.get(index).toUpperCase()))
 								list.add(cont);
@@ -4225,13 +3887,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare null to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4250,19 +3912,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare null to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (compareDate(comp, value).equals("equal"))
+										if (compareDate(comp, value).equals("igual"))
 											list.add(cont);
 										cont++;
 									}	
@@ -4274,13 +3936,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4301,13 +3963,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4326,19 +3988,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (!compareDate(comp, value).equals("equal"))
+										if (!compareDate(comp, value).equals("igual"))
 											list.add(cont);
 										cont++;
 									}
@@ -4350,13 +4012,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4377,13 +4039,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4402,19 +4064,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (compareDate(comp, value).equals("lower than"))
+										if (compareDate(comp, value).equals("menor"))
 											list.add(cont);
 										cont++;
 									}
@@ -4426,13 +4088,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4453,13 +4115,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4478,19 +4140,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (compareDate(comp, value).equals("bigger than"))
+										if (compareDate(comp, value).equals("mayor"))
 											list.add(cont);
 										cont++;
 									}
@@ -4502,13 +4164,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4529,13 +4191,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4554,19 +4216,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("lower than"))
+										if (compareDate(comp, value).equals("igual") || compareDate(comp, value).equals("menor"))
 											list.add(cont);
 										cont++;
 									}
@@ -4578,13 +4240,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4605,13 +4267,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 						{
 							Double valor = Double.parseDouble(value);
 							int cont = 0;
-							for (ArrayList<String> fila : this.table.getData())
+							for (ArrayList<String> fila : this.table_use.getData())
 							{
 								String s = fila.get(index);
 								if (s.toLowerCase().equals("null"))
 								{
-									String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-									this.errors.add(rule_5);
+									String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+									this.errores.add(rule_5);
 									return null;
 									
 								}
@@ -4630,19 +4292,19 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 							if (!value.equals("'") && atr.gettype().equals("date") && tipo.equals("date"))
 							{
 								int cont = 0;
-								for (ArrayList<String> fila : this.table.getData())
+								for (ArrayList<String> fila : this.table_use.getData())
 								{
 									
 									String comp = fila.get(index);
 									if (comp.toLowerCase().equals("null"))
 									{
-										String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-										this.errors.add(rule_5);
+										String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+										this.errores.add(rule_5);
 										return null;
 									}
 									else
 									{
-										if (compareDate(comp, value).equals("equal") || compareDate(comp, value).equals("bigger than"))
+										if (compareDate(comp, value).equals("igual") || compareDate(comp, value).equals("mayor"))
 											list.add(cont);
 										cont++;
 									}
@@ -4654,13 +4316,13 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								if (!value.equals("'") && (atr.gettype().equals("char") || atr.gettype().equals("date")))
 								{
 									int cont = 0;
-									for (ArrayList<String> fila : this.table.getData())
+									for (ArrayList<String> fila : this.table_use.getData())
 									{
 										String comp = fila.get(index);
 										if (comp.toLowerCase().equals("null"))
 										{
-											String rule_5 = "Can't compare NULL to a value @line: " + ctx.getStop().getLine();
-											this.errors.add(rule_5);
+											String rule_5 = "No se puede comparar un null con un valor @line: " + ctx.getStop().getLine();
+											this.errores.add(rule_5);
 											return null;
 										}
 										else
@@ -4680,32 +4342,798 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 		}
 		else
 		{
-			String rule_5 = "La tabla " + this.table.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
-			this.errors.add(rule_5);
+			String rule_5 = "La tabla " + this.table_use.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+			this.errores.add(rule_5);
 			return null;
 		}
 		
 	}
 	
 	
-}
 	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
+	@Override
+	public Object visitLiteral(sqlParser.LiteralContext ctx) {
+		
+		if (ctx.getChild(0).getText().toUpperCase().equals("NULL"))
+			return "NULL";
+		else
+			return this.visit(ctx.getChild(0));
+		
+	}
 
+	/****************************
+	 * Recibimos un numero
+	 * Si este contiene un punto
+	 * quitamos todo lo que este despues del punto
+	 ****************************/
+	@Override 
+	public T visitInt_literal(@NotNull sqlParser.Int_literalContext ctx) 
+	{ 
+		String num = ctx.INT().getText();
+		
+		if (num.contains("."))
+		{
+			int index = num.indexOf('.');
+			num = num.substring(0, index);
+		}
+		
+		return (T)"int"; 
+	}
 	
+	
+	/****************************
+	 * Recibimos un numero
+	 * Si este no contiene punto
+	 * le agregamos .0
+	 ****************************/
+	@Override 
+	public T visitFloat_literal(@NotNull sqlParser.Float_literalContext ctx) 
+	{ 
+		String num = ctx.INT(0).getText();
+		
+		if (!num.contains("."))
+		{
+			num += ".0";
+		}
+		
+		return (T)"float"; 
+	}
+	
+	
+	/******************************************
+	 * YEAR-MONTH-DAY
+	 * 1<=MONTH<=12
+	 * Validamos el dia segun el mes y el año
+	 *******************************************/
+	@Override 
+	public T visitDate_literal(@NotNull sqlParser.Date_literalContext ctx) 
+	{ 
+		String fecha = ctx.DATE().getText(); 
+		
+		fecha = fecha.replace("'", "");
+		
+		String[] date = fecha.split("-");
+		
+		int anio = Integer.parseInt(date[0]);
+		int mes = Integer.parseInt(date[1]);
+		int dia = Integer.parseInt(date[2]);
+		
+		String tipo = "Error";
+		
+		if (1 <= mes && mes<= 12 && dia>=1)
+		{
+			if (bisiesto(anio))
+			{
+				if (mes == 2)
+				{
+					if (dia<=29)
+					{
+						tipo = "date";
+					}
+				}
+				else
+				{
+					if (dia<=maxday(mes))
+					{
+						tipo = "date";
+					}
+				}
+			}
+			else
+			{
+				if (mes == 2)
+				{
+					if (dia<=28)
+					{
+						tipo = "date";
+					}
+				}
+				else
+				{
+					if (dia<=maxday(mes))
+					{
+						tipo = "date";
+					}
+				}
+			}
+		}
+		
+		return (T)tipo; 
+	}
+	
+	
+	/****************************
+	 * Recibimos un texto
+	 * Debemos revisar el tamaño de este texto
+	 ****************************/
+	@Override 
+	public T visitChar_literal(@NotNull sqlParser.Char_literalContext ctx) 
+	{ 
+		String text = ctx.CHAR().getText();
+		
+		text = text.substring(1, text.length() - 1);
+		
+		int length = text.length();
+		
+		return (T)"char";
+	}
+	
+	
+	/******************
+	 * Un año solo es bisiesto si es divisible entre 4
+	 * pero no dentro de 100 pero si dentro de 400
+	 * @param anio
+	 * @return
+	 */
+	public boolean bisiesto(int anio)
+	{
+		return (anio % 4 == 0) && ((anio % 100 != 0) || (anio % 400 == 0));
+	}
+	
+	
+	/************************
+	 * Segun el mes que recsivamos 
+	 * devolvemos le maximo dia que puede tener
+	 * @param mes
+	 * @return
+	 */
+	public int maxday(int mes)
+	{
+		int dia = 0;
+		
+		if (mes == 1 || dia == 3 || dia == 5 || dia == 7 || dia == 8 || dia == 10 || dia == 12)
+			dia = 31;
+		else
+			dia = 30;
+		
+		return dia;
+	}
+	
+	public String compareDate(String date1, String date2)
+	{
+		date1.replaceAll("'", "");
+		date2.replaceAll("'", "");
+		
+		String valor1[] = date1.split("-");
+		String valor2[] = date2.split("-");
+		
+		if (Integer.parseInt(valor1[0])<Integer.parseInt(valor2[0]))
+		{
+			return "menor";
+		}
+		else
+		{
+			if (Integer.parseInt(valor1[0])>Integer.parseInt(valor2[0]))
+			{
+				return "mayor";
+			}
+			else
+			{
+				if (Integer.parseInt(valor1[1])<Integer.parseInt(valor2[1]))
+				{
+					return "menor";
+				}
+				else
+				{
+					if (Integer.parseInt(valor1[1])>Integer.parseInt(valor2[1]))
+					{
+						return "mayor";
+					}
+					else
+					{
+						if (Integer.parseInt(valor1[2])<Integer.parseInt(valor2[2]))
+						{
+							return "menor";
+						}
+						else
+						{
+							if (Integer.parseInt(valor1[2])>Integer.parseInt(valor2[2]))
+							{
+								return "mayor";
+							}
+							else
+							{
+								return "igual";
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	
+	public boolean checkDate(String date)
+	{
+		if (!date.contains("-"))
+		{
+			return false;
+		}
+		else
+		{
+			String fecha[] = date.split("-");
+			
+			int size = fecha.length;
+			if (size!=3)
+				return false;
+			else
+			{
+				fecha[0].replaceAll("'", "");
+				fecha[2].replaceAll("'", "");
+				if(fecha[0].length() >4 && fecha[1].length() > 2 && fecha[2].length()>2)
+				{
+					return false;
+				}
+				else
+				{
+					//revisar que sean fechas validas
+					return true;
+				}
+			}	
+		}
+	}
+	public T visitShow_column_statement(sqlParser.Show_column_statementContext ctx){
+		//SHOW COLUMNS FROM ID (comprobar use database, id contenido en database)
+		
+		if (getCurrent().getName().isEmpty()){
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
+		}else{
+			String ID = ctx.getChild(3).getText();
+			Table tb = getCurrent().getTable(ID);
+			if (tb == null){
+				String no_database_in_use = "No hay una Tabla " +ID+" en la Base de Datos " +getCurrent().getName()+" @line: " + ctx.getStop().getLine();
+	        	this.errores.add(no_database_in_use);
+	        	//System.out.println("error de tabla");
+			}else{
+				return (T) tb;
+			}
+		}
+		
+		return (T)new String();
+	}
+	
+	public T visitShow_schema_statement(sqlParser.Show_schema_statementContext ctx){
+		//SHOW DATABASES
+		//System.out.println("llego aqui");
+		return (T) dataBases;
+	}
+	
+	public T visitShow_table_statement(sqlParser.Show_table_statementContext ctx){
+		//SHOW TABLES (comprobar use database)
+		if (getCurrent().getName().isEmpty()){
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
+		}else{
+			
+			ArrayList<Attribute> atr = new ArrayList();
+			atr.add(new Attribute("Tables"));
+			
+			ArrayList<ArrayList<String>> values = new ArrayList();
+			for (Table tb: getCurrent().getTables()){
+				ArrayList<String> val = new ArrayList();
+				val.add(tb.getName());
+				values.add(val);
+			}
+			Table tb1 = new Table(getCurrent().getName());
+			tb1.setattributes(atr);
+			tb1.setData(values);
+			return (T) tb1;
+		}
+		return (T) new String();
+	}
+
+	public Object visitSelect_value (sqlParser.Select_valueContext ctx){
+		
+		if (actual.getName().isEmpty()){
+			String no_database_in_use = "No hay una Base de Datos en uso @line: " + ctx.getStop().getLine();
+        	this.errores.add(no_database_in_use);
+        	return null;
+		}
+			
+		
+		ArrayList<String> tables = (ArrayList<String>)visit(ctx.localIDS());
+		for (String st: tables){
+			if (!actual.existTable(st)){
+				String no_database_in_use = "No hay una Tabla " +st+" en la Base de Datos " +getCurrent().getName()+" @line: " + ctx.getStop().getLine();
+	        	this.errores.add(no_database_in_use);
+	        	return null;
+			}
+		}
+		
+		String dupTable = (String)checkDuplicates(tables);
+		if (!dupTable.isEmpty()){
+			String error_ = "La tabla <<" +dupTable+">> ha sido llamada mas de una vez @line: " + ctx.getStop().getLine();
+        	this.errores.add(error_);
+        	return null;
+		}
+		
+		Table crossTable = new Table(actual.getTable(tables.get(0)));
+		crossTable.setNamesByTable();
+		
+		int i = 0;
+		for (String st: tables){
+			if (i != 0){
+				crossTable = crossJoin(crossTable,actual.getTable(st));
+			}else{
+				i++;
+			}
+		}
+		
+		if (ctx.getChildCount() <= 5){//<= 5 porque hay que tomar en cuenta ';'
+			
+			return getTableFromSelectedColumns(crossTable, ctx.getChild(1));
+		}
+		
+		
+		String word = ctx.getChild(4).getText();
+		
+		if (word.toUpperCase().equals("WHERE")){
+			
+			table_use = crossTable;
+			
+			Object result = (Object) visit(ctx.getChild(5));//visitamos condition
+			
+			if (result == null){
+				String error_ = "Error en la definicion de condiciones @line: " + ctx.getStop().getLine();
+	        	this.errores.add(error_);
+				return null;
+			}
+			
+			if (!(result instanceof LinkedHashSet)){
+				String error_ = "Error en la definicion de condiciones @line: " + ctx.getStop().getLine();
+	        	this.errores.add(error_);
+				return null;
+			}
+			
+			LinkedHashSet<Integer> index = (LinkedHashSet<Integer>)result;
+			
+			ArrayList<ArrayList<String>> data = new ArrayList();
+			for (int j: index){
+				data.add(table_use.getData().get(j));
+			}
+			
+			
+			table_use.setData(data);
+			if (ctx.getChildCount()<=7)
+				return getTableFromSelectedColumns(table_use,ctx.getChild(1));
+			
+			//tiene orden
+			Object obj = getCompare(table_use, (sqlParser.OrderContext) ctx.order());
+			if (obj == null) return null;
+			
+			table_use = (Table) obj;
+			return getTableFromSelectedColumns(table_use,ctx.getChild(1));
+			
+		}else if (word.toUpperCase().equals("ORDER")){
+			
+			table_use = crossTable;
+			
+			//tiene orden
+			Object obj = getCompare(table_use, (sqlParser.OrderContext) ctx.order());
+			if (obj == null) return null;
+			
+			table_use = (Table) obj;
+			return getTableFromSelectedColumns(table_use,ctx.getChild(1));
+		}
+		
+		return null;
+	}
+	
+	public Object getCompare(Table table, sqlParser.OrderContext ctx){
+		
+		try{
+			Collections.sort(table.getData(), new DatetimeComparable(){
+				public int compare(ArrayList<String> tupla1, ArrayList<String> tupla2){
+					
+					Object obj = visitOrder(tupla1,tupla2,ctx);
+					
+					if (obj == null) return (Integer)null;
+					
+					if (obj instanceof Integer) return (Integer) obj;
+					return (Integer)null;
+				}
+			});
+			
+			return table;
+		}catch (Exception e){
+			//e.printStackTrace();
+		}
+		
+		return null;
+				
+	}
+	
+	public Object visitOrder(ArrayList<String> tupla1, ArrayList<String> tupla2, sqlParser.OrderContext ctx){
+		if (ctx instanceof sqlParser.OrderUniContext) return visitOrderUni(tupla1, tupla2, (sqlParser.OrderUniContext)ctx);
+		
+		if (ctx instanceof sqlParser.OrderMultiContext) return visitOrderMulti(tupla1, tupla2, (sqlParser.OrderMultiContext)ctx);
+		
+		return null;
+	}
+	
+	public Object visitOrderUni (ArrayList<String> tupla1, ArrayList<String> tupla2, sqlParser.OrderUniContext ctx){
+		String id = (String) visit(ctx.getChild(0));//obtenemos id
+		
+		Attribute at = table_use.getID(id);//obtenemos el atributo
+		if (at == null){
+			String rule_5 = "La tabla " + table_use.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+			errores.add(rule_5);
+			return null;
+		}
+		
+		if (table_use.isAmbiguous(id)){
+			String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
+			errores.add(error_);
+			return null;
+		}
+		
+		String op = "ASC";
+		if (ctx.getChildCount()>1) op = ctx.getChild(1).getText().toUpperCase();
+		
+		String st = "";
+		
+		int index = table_use.getattributes().indexOf(at);//obtenemos el indice en data
+		
+		if (tupla1.get(index).toUpperCase().equals("NULL")){//primero es null
+			if (!tupla2.get(index).toUpperCase().equals("NULL")){//segundo no es null
+				return 1;//tupla 1 es mayor porque es null
+			}
+			return 0;//si el primero es null y el segundo tambien, son iguales
+		}else{
+			if (tupla2.get(index).toUpperCase().equals("NULL")){
+				return -1;//tupla 2 es mayor porque es null
+			}
+		}//no son null, que sigan
+		
+		String tipo = at.gettype().toLowerCase();
+		DatetimeComparable dt = new DatetimeComparable();
+		switch (op){
+			case "ASC":
+				if (tipo.equals("date")){
+					return dt.compareDate(tupla1.get(index),tupla2.get(index));
+				}else if (tipo.equals("int") || tipo.equals("float")){
+					return dt.compareNum(tupla1.get(index),tupla2.get(index));
+				}else{
+					return tupla1.get(index).compareTo(tupla2.get(index));
+				}
+				//break;
+			case "DESC":
+				if (tipo.equals("date")){
+					return -dt.compareDate(tupla1.get(index),tupla2.get(index));
+				}else if (tipo.equals("int") || tipo.equals("float")){
+					return -dt.compareNum(tupla1.get(index),tupla2.get(index));
+				}else{
+					return -tupla1.get(index).compareTo(tupla2.get(index));
+				}
+				//break;
+		}
+		return null;
+	}
+
+	public Object visitOrderMulti (ArrayList<String> tupla1, ArrayList<String> tupla2, sqlParser.OrderMultiContext ctx){
+		String id = (String) visit(ctx.getChild(0));//obtenemos id
+		
+		Attribute at = table_use.getID(id);//obtenemos el atributo
+		if (at == null){
+			String rule_5 = "La tabla " + table_use.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+			errores.add(rule_5);
+			return null;
+		}
+		
+		if (table_use.isAmbiguous(id)){
+			String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
+			errores.add(error_);
+			return null;
+		}
+		
+		String op = "ASC";
+		if (!ctx.getChild(1).getText().equals(","))
+			op = ctx.getChild(1).getText().toUpperCase();
+		
+		String st = "";
+		
+		int index = table_use.getattributes().indexOf(at);//obtenemos el indice en data
+		
+		if (tupla1.get(index).toUpperCase().equals("NULL")){//primero es null
+			if (!tupla2.get(index).toUpperCase().equals("NULL")){//segundo no es null
+				return 1;//tupla 1 es mayor porque es null
+			}
+			return visitOrder(tupla1,tupla2,ctx.order());//si el primero es null y el segundo tambien, son iguales
+		}else{
+			if (tupla2.get(index).toUpperCase().equals("NULL")){
+				return -1;//tupla 2 es mayor porque es null
+			}
+		}//si no son null, que retorne lo normal
+		
+		String tipo = at.gettype().toLowerCase();
+		
+		DatetimeComparable dt = new DatetimeComparable();
+		if (tipo.equals("date")){
+			
+			if (dt.compareDate(tupla1.get(index),tupla2.get(index))==0){
+				return visitOrder(tupla1,tupla2,ctx.order());
+			}
+		}else if (tipo.equals("int") || tipo.equals("float")){
+			if (dt.compareNum(tupla1.get(index),tupla2.get(index))==0){
+				return visitOrder(tupla1,tupla2,ctx.order());
+			}
+		}else{
+			if (tupla1.get(index).compareTo(tupla2.get(index))==0){
+				return visitOrder(tupla1,tupla2,ctx.order());
+			}
+		}
+		
+		
+		switch (op){
+			case "ASC":
+				if (tipo.equals("date")){
+					return dt.compareDate(tupla1.get(index),tupla2.get(index));
+				}else if (tipo.equals("int") || tipo.equals("float")){
+					return dt.compareNum(tupla1.get(index),tupla2.get(index));
+				}else{
+					return tupla1.get(index).compareTo(tupla2.get(index));
+				}
+				//break;
+			case "DESC":
+				if (tipo.equals("date")){
+					return -dt.compareDate(tupla1.get(index),tupla2.get(index));
+				}else if (tipo.equals("int") || tipo.equals("float")){
+					return -dt.compareNum(tupla1.get(index),tupla2.get(index));
+				}else{
+					return -tupla1.get(index).compareTo(tupla2.get(index));
+				}
+				//break;
+		}
+		return null;
+	}
+	
+	public Object getTableFromSelectedColumns(Table table, ParseTree pr){
+		if (pr.getText().equals("*")) return table;//selecciona todas
+		
+		if (!(pr instanceof sqlParser.NlocalIDSContext)) return null;
+		sqlParser.NlocalIDSContext ctx = (sqlParser.NlocalIDSContext) pr;
+		
+		ArrayList<String> columns = (ArrayList<String>) visit(ctx);
+		Table ntable = new Table();
+		ntable.setName(table.getName());
+		
+		ArrayList<ArrayList<String>> data = new ArrayList();
+		for (int i = 0; i < table.getData().size(); i++){
+			data.add(new ArrayList());
+		}
+		ntable.setData(data);
+		
+		for (String id : columns){
+			Attribute at = table.getID(id);
+			if (at == null){
+				String rule_5 = "La relacion " + table.getName() + " no contiene la columna " + id + " @line: " + ctx.getStop().getLine();
+				errores.add(rule_5);
+				return null;
+			}
+			
+			if (table.isAmbiguous(id)){
+				String error_ = "La llamada <<"+id+">> es ambigua @line: " + ctx.getStop().getLine();
+				errores.add(error_);
+				return null;
+			}
+			
+			int index = table.getattributes().indexOf(at);
+			ntable.getattributes().add(table.getattributes().get(index));
+			ntable.getOthersIds().add(table.getOthersIds().get(index));
+			
+			int i = 0;
+			for (ArrayList<String> tupla: ntable.getData()){
+				tupla.add(table.getData().get(i).get(index));
+				i++;
+			}
+			
+		}		
+		
+		return ntable;
+	}
+	
+	public Object checkDuplicates (ArrayList<String> tables){
+		LinkedHashSet<String> ntables = new LinkedHashSet(tables);
+		LinkedHashSet<String> dup = new LinkedHashSet();
+		for (String st: ntables){
+			if (dup.contains(st)){
+				return st;
+			}
+			dup.add(st);
+		}
+		return "";
+	}
+	
+	public Object visitNlocalIDS (sqlParser.NlocalIDSContext ctx){
+		if (ctx.getChildCount() <= 1){
+			ArrayList<String> ar = new ArrayList();
+			ar.add((String)visitChildren(ctx));
+			return ar;
+		}
+		
+		ArrayList<String> ar = new ArrayList();
+		ar.add((String) visit(ctx.getChild(0)));
+		ar.addAll((ArrayList<String>)visit(ctx.getChild(2)));
+		return ar;		
+	}
+	
+	/**
+	 * requiere un paso base
+	 * a tb1 se debe llamar tb1.setNamesByTable() fuera del metodo
+	 * el metodo supone que tb1 es el crossJoin de otras tablas, 
+	 * por lo que solo se debe agregar tb2 al crossJoin 
+	 * 
+	 * @param tb1
+	 * @param tb2
+	 * @return
+	 */
+	public Table crossJoin(Table tb1, Table tb2){
+		//tb1.setNameByTable(); ya estan mezclados
+		tb2.setNamesByTable();
+		Table nTb = new Table();
+		
+		nTb.setName("Select");
+		
+		//agregamos todos los atributos
+		ArrayList<Attribute> at = new ArrayList();
+		at.addAll(tb1.getattributes());
+		at.addAll(tb2.getattributes());
+		nTb.setattributes(at);
+		
+		//agregamos nuevos nombres tabla.atributo
+		ArrayList<String> otN = new ArrayList();
+		otN.addAll(tb1.getOthersIds());
+		otN.addAll(tb2.getOthersIds());
+		nTb.setOthersIds(otN);
+		
+		//vergueo con data
+		ArrayList<ArrayList<String>> data = new ArrayList();
+		for (ArrayList<String> tupla1: tb1.getData()){
+			for (ArrayList<String> tupla2: tb2.getData()){
+				ArrayList<String> tupla = new ArrayList();
+				tupla.addAll(tupla1);
+				tupla.addAll(tupla2);
+				data.add(tupla);
+			}
+		}
+		nTb.setData(data);
+		//System.out.println(data);
+		return nTb;
+	}
+	
+	public Object visitNID( sqlParser.NIDContext ctx){
+		if (ctx.getChildCount() <= 1) return ctx.getChild(0).getText();
+	
+		return ctx.getChild(0).getText()+"."+ctx.getChild(2).getText();
+	}
+	
+	public DataBase getCurrent() {
+		return actual;
+	}
+
+	public void setActual(DataBase actual) {
+		this.actual = actual;
+	}
+	
+	public boolean PrimaryKey(ArrayList<String> fila, Integer indice)
+	{
+		ArrayList<Constraint> key = this.table_use.getPrimaryKeys();
+		
+		ArrayList<Integer> primary = new ArrayList<Integer>();
+		
+		if (key.size() != 0)
+		{
+			Constraint llave = key.get(0);
+			for (String id : llave.getIDS_local())	
+			{
+				Attribute atr = this.table_use.getID(id);
+				primary.add(this.table_use.getattributes().indexOf(atr));
+			}
+			
+			int i=0;
+			for (ArrayList<String> newfila:this.table_use.getData())
+			{
+				int cont=0;
+				for (int index : primary)
+				{
+					if (newfila.get(index).equals(fila.get(index)))
+					{
+						cont++;
+					}
+				}
+				if (cont == primary.size())
+				{
+					if (indice!=-1)
+					{
+						if (indice!= i)
+						{
+							return false;
+						}
+					}
+					else
+						return false;
+				}
+				i++;
+			}
+		}
+		
+		return true;
+	}
+	
+	
+	//devuelve si la llave foreana existe en la/las otras tablas
+	public boolean ForeignKey(ArrayList<String> fila, Integer indice)
+	{
+		ArrayList<Constraint> key = this.table_use.getForeignKey();
+		
+		int exist = 0;
+		for (Constraint llave : key)
+		{
+			//tengo que ir a traer la tabla a la que hacen referencia
+			//recorrer la tabla y ver si el valor en la fila en el indice del id local existe en la tabla
+			//aumento un contador
+			//si el contador al final es igla al total de constraints devuelve true 
+			Table ref_tabla = this.actual.getTable(llave.getId_ref());
+			if (ref_tabla != null)
+			{
+				int index = 0;
+				int cont = 0;
+				for (String id : llave.getIDS_refs()) 
+				{
+					//Traemos el atributo de la tabla a la que hacemos referencia
+					//Y el indice de esta en la tabla
+					Attribute atr = ref_tabla.getID(id);
+					int index_ref = ref_tabla.getattributes().indexOf(atr);
+					
+					//Traems el atributo de la tabla local
+					//Y el indice de este en la tabla
+					String local = llave.getIDS_local().get(index);
+					Attribute atr2 = this.table_use.getID(local);
+					int index_loc = this.table_use.getattributes().indexOf(atr2);
+					
+					for (ArrayList<String> row:ref_tabla.getData())
+					{
+						if(row.get(index_ref).equals(fila.get(index_loc)))
+						{
+							cont++;
+						}
+					}
+					
+					index++;
+				}
+				if (cont != llave.getIDS_refs().size())
+					return false;
+				else
+					exist++;
+			}
+			else
+				return false;
+		}
+		
+		if (exist == key.size())
+			return true;
+		else
+			return false;
+	}
+}
