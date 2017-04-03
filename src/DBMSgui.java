@@ -11,8 +11,10 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.io.PrintWriter;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -49,6 +51,8 @@ import javax.swing.KeyStroke;
 import javax.swing.border.Border;
 import javax.swing.event.CaretEvent;
 import javax.swing.event.CaretListener;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.text.BadLocationException;
@@ -64,9 +68,11 @@ import org.antlr.v4.runtime.tree.ParseTree;
 
 import generatedsources.sqlLexer;
 import generatedsources.sqlParser;
+import javafx.scene.control.TreeView;
 import views.LineNumberTableRowHeader;
 import views.TextLineNumber;
 import views.Tree;
+import views.TreePanel;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,12 +93,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 	JTextArea OutputArea, verboseArea;
 	JTabbedPane tabbedPane, tabbedPaneQuery;
 	JSplitPane izqder,arribajo;
-	
+	TreePanel tree;
 	String comment = "//", text = "";
 	boolean verboseTrue = false;
 	ArrayList<String> verbose = new ArrayList<String>();
 	int caretLine = 1, caretColumn = 1;
 	
+	dbmsVisitor semantic_checker;
 	
 	
 	public static void main(String[] args) {
@@ -330,22 +337,21 @@ public class DBMSgui extends JFrame implements ActionListener {
 		verboseBox.addActionListener(this);
 		toolBar.add(verboseBox);
 		
-		/*izqder = new JSplitPane();
-		izqder.setResizeWeight(0.5);
+		izqder = new JSplitPane();
+		izqder.setResizeWeight(0.2);
 		izqder.setContinuousLayout(true);
 		izqder.setOrientation(JSplitPane.HORIZONTAL_SPLIT);
 		this.getContentPane().add(izqder, BorderLayout.CENTER);
-		*/
+		
+		tree = new TreePanel();
+		addTreeSelection(tree.getTree());
+		izqder.setLeftComponent(tree);
+		
 		arribajo = new JSplitPane();
 		arribajo.setResizeWeight(0.5);
 		arribajo.setContinuousLayout(true);
 		arribajo.setOrientation(JSplitPane.VERTICAL_SPLIT);
-		this.getContentPane().add(arribajo, BorderLayout.CENTER);
-		//izqder.setRightComponent(arribajo);
-		
-		/*textArea = new JTextArea(20,120);
-		textArea.setFont(new Font("Monoespaced",Font.PLAIN,12));*/
-		
+		izqder.setRightComponent(arribajo);
 		
 		textArea = new JTextPane();
 		textArea.getDocument().addUndoableEditListener(undoManager);
@@ -374,7 +380,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		verboseArea.setEditable(false);
 		scroll2.setViewportView(verboseArea);
 		
-		
+		dbmsVisitor semantic_checker = new dbmsVisitor();
 		
 	}
 
@@ -389,9 +395,9 @@ public class DBMSgui extends JFrame implements ActionListener {
 			save();
 		}else if (e.getSource() == miSaveAs){
 			saveAs();
-			//explorer.revalidate();
-			//explorer.repaint();
-			//addTreeSelection(explorer.getTree());
+			tree.revalidate();
+			tree.repaint();
+			addTreeSelection(tree.getTree());
 		}else if (e.getSource() == miUndo ||
 				e.getSource() == btnUndo){
 			undo();
@@ -401,9 +407,9 @@ public class DBMSgui extends JFrame implements ActionListener {
 		}else if (e.getSource() == miRun ||
 				e.getSource() == btnRun){
 			run();
-			//explorer.revalidate();
-			//explorer.repaint();
-			//addTreeSelection(explorer.getTree());
+			tree.revalidate();
+			tree.repaint();
+			addTreeSelection(tree.getTree());
 		}else if (e.getSource() == miComment){
 			comment();
 		}else if (e.getSource() == btnDelete){
@@ -497,8 +503,6 @@ public class DBMSgui extends JFrame implements ActionListener {
 	
 	        sqlParser parser = new sqlParser(tokens);
 	        
-	        dbmsVisitor semantic_checker = new dbmsVisitor();
-	        
 	        //errores sintacticos
 	        parser.removeErrorListeners();
 	        parser.addErrorListener(descriptiveErrorListener.INSTANCE);
@@ -574,10 +578,9 @@ public class DBMSgui extends JFrame implements ActionListener {
 			}
             
             System.out.println(file.getAbsolutePath());
-            //This is where a real application would save the file.
-            //log.append("Saving: " + file.getName() + "." + newline);
+
         } else {
-            //log.append("Save command cancelled by user." + newline);
+            
         }
 	}
 
@@ -624,7 +627,7 @@ public class DBMSgui extends JFrame implements ActionListener {
         
         	//System.out.println(file.getAbsolutePath());
         } else {
-        	//JOptionPane.showMessageDialog(null,"\nNo se ha encontrado el archivo","ADVERTENCIA!!!",JOptionPane.WARNING_MESSAGE);
+        	JOptionPane.showMessageDialog(null,"\n no file found","WARNING",JOptionPane.WARNING_MESSAGE);
         }
 	}
 
@@ -703,14 +706,80 @@ public class DBMSgui extends JFrame implements ActionListener {
 		return ret;
 	}
 
-    public void addNewTab(Schema dataBases){
+    public void addNewTab(File file){
+		try{
+			String path = file.getAbsolutePath();
+			String name = file.getName();
+			FileInputStream fis = new FileInputStream(path);
+			BufferedReader br = new BufferedReader(new FileReader(path));
+	
+			if (br.readLine() != null)
+			{
+				ObjectInputStream in = new ObjectInputStream(fis);
+				Object obj = in.readObject();
+				if (obj instanceof Table){
+					Path currentRelativePath = Paths.get("");
+					String dataPath = currentRelativePath.toAbsolutePath().toString() + "\\data\\";
+					FileInputStream fis1 = new FileInputStream(dataPath+"dbs.bin");
+					BufferedReader br1 = new BufferedReader(new FileReader(dataPath+"dbs.bin"));
+					Schema schemas = null;
+					if (br1.readLine() != null)
+					{
+						ObjectInputStream in1 = new ObjectInputStream(fis1);
+						schemas = (Schema)in1.readObject();
+			
+						in1.close();
+					}
+					fis1.close();
+					br1.close();
+					if (schemas != null){
+						
+						String dataBaseName = file.getParentFile().getName();
+						
+						DataBase dataBase = null;
+						
+						for (int i = 0; i < schemas.getSchema().size(); i++){
+							if (schemas.getSchema().get(i).getName().equals(dataBaseName)){
+								dataBase = schemas.getSchema().get(i);
+							}
+						}
+						
+						if (dataBase != null){
+							
+							Table dataBaseTable = dataBase.getTable(name.substring(0, name.length()-4));//quito .bin
+							
+							if (dataBaseTable != null){
+								addNewTab(dataBaseTable);
+							}else if (obj instanceof Schema){
+						Schema schema = (Schema)obj;
+						addNewTab(schema);
+						//table = createNewTable(schemas);
+						//System.out.println(schemas);
+					}
+						
+					
+					in.close();
+						}
+					
+				}
+				br.close();
+				fis.close();
+				}
+			}
+			} catch (Exception e){
+				//e.printStackTrace();
+				System.out.println(e.toString());
+			}	
+	}
+    
+    public void addNewTab(Schema schemas){
 		String name = "dbs.bin";
 		JTable table = null;
 		JScrollPane scrollPane_1 = new JScrollPane(table, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		//JScrollPane scrollPane_1 = new JScrollPane();
 		
 		
-		table = createNewTable(dataBases);	
+		table = createNewTable(schemas);	
 		if (table != null){
 			LineNumberTableRowHeader tableLineNumber = new LineNumberTableRowHeader(scrollPane_1,table);
 			scrollPane_1.setRowHeaderView(tableLineNumber);
@@ -791,10 +860,10 @@ public class DBMSgui extends JFrame implements ActionListener {
 		//return null;
 	}
 
-	public JTable createNewTable(Schema dataBases){
+	public JTable createNewTable(Schema schemas){
 		String [] columnNames = {"Database","Table Number"};
 		DefaultTableModel tableModel = new DefaultTableModel(columnNames, 0);
-		for (DataBase st: dataBases.getSchema()){
+		for (DataBase st: schemas.getSchema()){
 			Object[] objs = {st.getName(), st.getTables().size()};
 			//if (objs.length > 0)
 				tableModel.addRow(objs);
@@ -879,6 +948,14 @@ public class DBMSgui extends JFrame implements ActionListener {
 		return str;
 	}
 
+	public void addTreeSelection(JTree tree){
+		tree.addTreeSelectionListener(new TreeSelectionListener(){
+			public void valueChanged(TreeSelectionEvent event){
+				File file = (File) tree.getLastSelectedPathComponent();
+				addNewTab(file);
+			}
+		});
+	}
 	
 	
 }
