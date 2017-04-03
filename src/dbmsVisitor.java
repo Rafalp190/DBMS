@@ -39,6 +39,11 @@ import generatedsources.sqlParser;
 
 
 
+/**
+ * @author Rafa
+ *
+ * @param <T>
+ */
 public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 
 	// Attributes

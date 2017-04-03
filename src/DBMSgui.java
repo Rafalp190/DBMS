@@ -90,7 +90,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	UndoManager undoManager;
 	File file;
 	JTextPane textArea;
-	JTextArea OutputArea, verboseArea;
+	JTextPane OutputArea, verboseArea;
 	JTabbedPane tabbedPane, tabbedPaneQuery;
 	JSplitPane izqder,arribajo;
 	TreePanel tree;
@@ -99,7 +99,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	ArrayList<String> verbose = new ArrayList<String>();
 	int caretLine = 1, caretColumn = 1;
 	
-	dbmsVisitor semantic_checker;
+	dbmsVisitor<Object> semantic_checker = new dbmsVisitor();
 	
 	
 	public static void main(String[] args) {
@@ -370,17 +370,17 @@ public class DBMSgui extends JFrame implements ActionListener {
 		
 		JScrollPane scroll1 = new JScrollPane();
 		tabbedPane.addTab("Data Output", null, scroll1, null);
-		OutputArea = new JTextArea();
+		OutputArea = new JTextPane();
 		OutputArea.setEditable(false);
 		scroll1.setViewportView(OutputArea);
 		
 		JScrollPane scroll2 = new JScrollPane();
 		tabbedPane.addTab("Verbose", null, scroll2, null);
-		verboseArea = new JTextArea();
+		verboseArea = new JTextPane();
 		verboseArea.setEditable(false);
 		scroll2.setViewportView(verboseArea);
 		
-		dbmsVisitor semantic_checker = new dbmsVisitor();
+		
 		
 	}
 
@@ -517,7 +517,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        
 	        
 	        Object obj = (Object)semantic_checker.visit(tree);
-	        semantic_checker.saveSchema();
+	        semantic_checker.guardarDBs();
 	        
 	        if (semantic_checker.getCurrent().getName().isEmpty()){
 	        	dataBaseUse.setText("Database: ");
@@ -542,12 +542,12 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        }
 	        //System.out.println(this.toStringVerbose());
 	        
-	        if (!semantic_checker.errorsToString().isEmpty())
-	        	OutputArea.setText(semantic_checker.errorsToString()+"\n"+calculateTime(estimatedTime));
+	        if (!semantic_checker.erroresToString().isEmpty())
+	        	OutputArea.setText(semantic_checker.erroresToString()+"\n"+calculateTime(estimatedTime));
 	        else
-	        	OutputArea.setText(semantic_checker.toStringMessages() + "\n" + "Terminado"+"\n"+calculateTime(estimatedTime));
+	        	OutputArea.setText("\n" + "Terminado"+"\n"+calculateTime(estimatedTime));
 	       
-	        semantic_checker.clearValues();
+	        semantic_checker.resetValues();
 	        //splitPane1.setLeftComponent(new SimpleTree());
 		} catch (Exception e){
 			
