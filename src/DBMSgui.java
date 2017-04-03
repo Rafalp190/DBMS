@@ -138,7 +138,10 @@ public class DBMSgui extends JFrame implements ActionListener {
 		JMenuBar menuBar = new JMenuBar();
 		this.setJMenuBar(menuBar);
 		
+		menuBar.setBackground(Color.DARK_GRAY);
+		
 		JMenu menuFile = new JMenu("File");
+		menuFile.setForeground(Color.white);
 		menuBar.add(menuFile);
 		
 		miOpen = new JMenuItem("Open");
@@ -158,6 +161,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		menuFile.add(miSaveAs);
 		
 		JMenu menuEdit = new JMenu("Edit");
+		menuEdit.setForeground(Color.WHITE);
 		menuBar.add(menuEdit);
 		
 		miUndo = new JMenuItem("Undo");
@@ -195,6 +199,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		menuEdit.add(miComment);
 		
 		JMenu menuRun = new JMenu("Run");
+		menuRun.setForeground(Color.WHITE);
 		menuBar.add(menuRun);
 		
 		miRun = new JMenuItem("Run");
@@ -332,9 +337,13 @@ public class DBMSgui extends JFrame implements ActionListener {
 			System.out.println("Error in imagenes/erase.png");
 		}
 		toolBar.add(btnDelete);
-		
+		toolBar.setBackground(Color.darkGray);
+		toolBar.setFloatable(false);
 		verboseBox = new JCheckBox("Verbose");
 		verboseBox.addActionListener(this);
+		verboseBox.setBackground(Color.DARK_GRAY);
+		verboseBox.setForeground(Color.WHITE);
+		
 		toolBar.add(verboseBox);
 		
 		izqder = new JSplitPane();
@@ -351,32 +360,41 @@ public class DBMSgui extends JFrame implements ActionListener {
 		arribajo.setResizeWeight(0.5);
 		arribajo.setContinuousLayout(true);
 		arribajo.setOrientation(JSplitPane.VERTICAL_SPLIT);
+		arribajo.setBackground(Color.DARK_GRAY);
 		izqder.setLeftComponent(arribajo);
 		
 		textArea = new JTextPane();
+		textArea.setBackground(Color.DARK_GRAY);
+		textArea.setForeground(Color.WHITE);
 		textArea.getDocument().addUndoableEditListener(undoManager);
 		setCaretListener(textArea);
 		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-		
+
 		tabbedPaneQuery = new JTabbedPane(JTabbedPane.TOP);
 		tabbedPaneQuery.addTab("Query Tool", null, scroll,null);
-		
+		tabbedPaneQuery.setBackground(Color.GRAY);
 		TextLineNumber tln = new TextLineNumber(textArea);
 		scroll.setRowHeaderView(tln);
 		arribajo.setLeftComponent(tabbedPaneQuery);
 		
 		tabbedPane = new JTabbedPane(JTabbedPane.TOP);
+		tabbedPane.setBackground(Color.LIGHT_GRAY);
+		tabbedPane.setForeground(Color.black);
 		arribajo.setRightComponent(tabbedPane);
 		
 		JScrollPane scroll1 = new JScrollPane();
 		tabbedPane.addTab("Data Output", null, scroll1, null);
 		OutputArea = new JTextPane();
+		OutputArea.setBackground(Color.DARK_GRAY);
+		OutputArea.setForeground(Color.WHITE);
 		OutputArea.setEditable(false);
 		scroll1.setViewportView(OutputArea);
 		
 		JScrollPane scroll2 = new JScrollPane();
 		tabbedPane.addTab("Verbose", null, scroll2, null);
 		verboseArea = new JTextPane();
+		verboseArea.setBackground(Color.DARK_GRAY);
+		verboseArea.setForeground(Color.WHITE);
 		verboseArea.setEditable(false);
 		scroll2.setViewportView(verboseArea);
 		

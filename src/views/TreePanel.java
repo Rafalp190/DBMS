@@ -9,6 +9,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.tree.TreeSelectionModel;
 
+import javafx.scene.paint.Color;
+
 public class TreePanel extends JPanel {
 
 	private JTree tree;
@@ -21,6 +23,7 @@ public class TreePanel extends JPanel {
 		setLayout(new BorderLayout());
 		add(new JScrollPane((JTree)tree),"Center");
 		tree.getSelectionModel().setSelectionMode(TreeSelectionModel.SINGLE_TREE_SELECTION);
+		
 	}
 	
 	public Dimension getPreferredSize(){
