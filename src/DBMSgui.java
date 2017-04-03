@@ -338,20 +338,20 @@ public class DBMSgui extends JFrame implements ActionListener {
 		toolBar.add(verboseBox);
 		
 		izqder = new JSplitPane();
-		izqder.setResizeWeight(0.2);
+		izqder.setResizeWeight(0.8);
 		izqder.setContinuousLayout(true);
 		izqder.setOrientation(JSplitPane.HORIZONTAL_SPLIT);
 		this.getContentPane().add(izqder, BorderLayout.CENTER);
 		
 		tree = new TreePanel();
 		addTreeSelection(tree.getTree());
-		izqder.setLeftComponent(tree);
+		izqder.setRightComponent(tree);
 		
 		arribajo = new JSplitPane();
 		arribajo.setResizeWeight(0.5);
 		arribajo.setContinuousLayout(true);
 		arribajo.setOrientation(JSplitPane.VERTICAL_SPLIT);
-		izqder.setRightComponent(arribajo);
+		izqder.setLeftComponent(arribajo);
 		
 		textArea = new JTextPane();
 		textArea.getDocument().addUndoableEditListener(undoManager);
@@ -518,13 +518,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        
 	        Object obj = (Object)semantic_checker.visit(tree);
 	        semantic_checker.guardarDBs();
-	        
-	        if (semantic_checker.getCurrent().getName().isEmpty()){
-	        	dataBaseUse.setText("Database: ");
-	        }else{
-	        	dataBaseUse.setText("Database: "+semantic_checker.getCurrent().getName());
-	        }
-
+	       
 	        long estimatedTime = System.nanoTime()-startTime;
 	        if (obj instanceof Schema){
 	        	Schema dbs = (Schema) obj;
@@ -545,7 +539,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 	        if (!semantic_checker.erroresToString().isEmpty())
 	        	OutputArea.setText(semantic_checker.erroresToString()+"\n"+calculateTime(estimatedTime));
 	        else
-	        	OutputArea.setText("\n" + "Terminado"+"\n"+calculateTime(estimatedTime));
+	        	OutputArea.setText(semantic_checker.toStringMessages()+"\n" + "Completed in: "+"\n"+calculateTime(estimatedTime));
 	       
 	        semantic_checker.resetValues();
 	        //splitPane1.setLeftComponent(new SimpleTree());
