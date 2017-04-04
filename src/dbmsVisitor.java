@@ -1812,9 +1812,6 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 	
 	/*****************************
 	 * COLUMNS
-	 * devolvemos un array con los atributos/columna a 
-	 * la que se desea ingresar un valor
-	 * debemos revisar que las columnas existan en la tabla
 	 */
 	@Override
 	public Object visitColumns(sqlParser.ColumnsContext ctx) {
@@ -1845,9 +1842,6 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 
 	/*************************
 	 * UPDATE
-	 * reviso si tiene where o no
-	 * si no tiene actualizo las columnas a actualizar de todas las filas
-	 * si hay actualizo solo de las filas que devuelva condition
 	 */
 	@Override
 	public Object visitUpdate_value(sqlParser.Update_valueContext ctx) {
@@ -1912,10 +1906,10 @@ public class dbmsVisitor<T> extends generatedsources.sqlBaseVisitor<Object> {
 								int index2 = newfila.indexOf(col);
 								if (col.equals("UPDATE"))
 								{
-									fin.set(i, fila.get(index2));
+									//fin.set(i, fila.get(index2));
 								}
 								else
-									fin.set(i, newfila.get(index2));
+									//fin.set(i, newfila.get(index2));
 							}
 							
 							//Revisamos que no venga un NULL en una PrimaryKey
