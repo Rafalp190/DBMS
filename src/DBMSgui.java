@@ -367,6 +367,7 @@ public class DBMSgui extends JFrame implements ActionListener {
 		textArea.setBackground(Color.DARK_GRAY);
 		textArea.setForeground(Color.WHITE);
 		textArea.getDocument().addUndoableEditListener(undoManager);
+		textArea.setCaretColor(Color.WHITE);
 		setCaretListener(textArea);
 		JScrollPane scroll = new JScrollPane (textArea,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
