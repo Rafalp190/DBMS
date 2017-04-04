@@ -11,5 +11,44 @@ Luego de tener instalado ecplise abra el workspace donde tiene guardado el proye
 abra el folder DBMS/src/default package
 abra el archivo DBMSgui.java y presione RUN.
 
+El proyecto DBMS es un intento de desarrollo de un manejador de bases de datos desde 0, se trabajó con ANTLR y Java.
+Cuenta con las funciones:
+
+**DDL**
+CREATE DATABASE
+ALTER DATABASE
+DROP DATABASE
+USE DATABASE
+CREATE TABLE
+PK
+FK
+CHK
+INT
+FLOAT
+DATE
+CHAR
+AND
+OR
+NOT
+<
+<=
+>
+>=
+<>
+=
+ALTER TABLE 
+RENAME
+ADD COLUMN
+ADD CONSTRAINT
+DROP CONSTRAINT
+DROP COLUMN
+SHOW TABLES
+SHOW COLUMNS FROM
+
+**DML** 
+INSERT INTO
+UPDATE
+DELETE FROM
+SELECT
 
 
